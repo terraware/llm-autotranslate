@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
-import { readFileSync } from 'fs';
+import { readFileSync, unwatchFile, watchFile } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -20,6 +20,7 @@ const __dirname = dirname(__filename);
 interface CliOptions {
   config: string;
   verbose: boolean;
+  watch: boolean;
 }
 
 export interface TargetLanguageConfig {
@@ -40,7 +41,12 @@ export interface AutotranslateConfig {
 
 interface ConfigFile extends AutotranslateConfig {}
 
-function parseCommandLine(): ConfigFile {
+interface ParsedOptions {
+  config: ConfigFile;
+  watch: boolean;
+}
+
+function parseCommandLine(): ParsedOptions {
   const program = new Command();
 
   program
@@ -48,6 +54,7 @@ function parseCommandLine(): ConfigFile {
     .description('A utility for automated translation of strings for localizable software')
     .version('1.0.0')
     .option('--config <path>', 'Optional path to the config file to use', 'autotranslate.json')
+    .option('--watch', 'Run continuously, watching for modifications to the source-language CSV file')
     .option('-v, --verbose', 'Show details of the configuration and the progress of the translations')
     .parse();
 
@@ -61,7 +68,7 @@ function parseCommandLine(): ConfigFile {
     // Set verbose mode - command line option overrides config file
     config.verbose = options.verbose || config.verbose;
 
-    return config;
+    return { config, watch: options.watch };
   } catch (error) {
     if (error instanceof Error) {
       console.error(`Error reading config file ${options.config}: ${error.message}`);
@@ -146,12 +153,63 @@ export async function autotranslate(config: AutotranslateConfig): Promise<void> 
 
 async function main() {
   try {
-    const config = parseCommandLine();
-    await autotranslate(config);
+    const { config, watch } = parseCommandLine();
+
+    if (watch) {
+      await runWatchMode(config);
+    } else {
+      await autotranslate(config);
+    }
   } catch (error) {
     console.error('Error:', error instanceof Error ? error.message : String(error));
     process.exit(1);
   }
+}
+
+async function runWatchMode(config: ConfigFile) {
+  const logger = new ConsoleLogger(config.verbose ?? false);
+
+  logger.log('Starting watch mode...');
+  logger.log(`Watching: ${config.source.file}`);
+  logger.log('Press Ctrl+C to stop.\n');
+
+  // Run initial translation
+  await autotranslate(config);
+
+  // Set up file watcher
+  let isProcessing = false;
+
+  watchFile(config.source.file, { interval: 1000 }, async (curr, prev) => {
+    if (isProcessing) {
+      return; // Avoid overlapping runs
+    }
+
+    if (curr.mtime > prev.mtime) {
+      isProcessing = true;
+      logger.log(`\n[${new Date().toLocaleTimeString()}] Source file changed, updating translations...`);
+
+      try {
+        await autotranslate(config);
+        logger.log(`[${new Date().toLocaleTimeString()}] Translations updated successfully.\n`);
+      } catch (error) {
+        logger.error(
+          `[${new Date().toLocaleTimeString()}] Translation update failed: ${error instanceof Error ? error.message : String(error)}\n`
+        );
+      } finally {
+        isProcessing = false;
+      }
+    }
+  });
+
+  // Handle graceful shutdown
+  process.on('SIGINT', () => {
+    logger.log('\nStopping watch mode...');
+    unwatchFile(config.source.file);
+    process.exit(0);
+  });
+
+  // Keep the process alive
+  process.stdin.resume();
 }
 
 interface TranslationCandidate {

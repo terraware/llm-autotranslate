@@ -21,6 +21,10 @@ Options:
 
 - `--config <path>`: Optional path to the config file to use. If not specified,
   defaults to `autotranslate.json`.
+- `--watch`: Run continuously, watching for modifications to the source-language
+  CSV file and updating the target-language files as needed. Useful in dev
+  environments to automatically keep translations up to date as original strings
+  are edited.
 - `--verbose` or `-v`: Show details of the configuration and the progress of
   the translations. Default is to run silently unless there's an error. Verbose
   mode may also be enabled in the config file.
