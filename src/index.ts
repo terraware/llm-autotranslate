@@ -13,6 +13,7 @@ const __dirname = dirname(__filename);
 
 interface CliOptions {
   config: string;
+  verbose: boolean;
 }
 
 interface TargetLanguageConfig {
@@ -28,6 +29,7 @@ interface ConfigFile {
     file: string;
   };
   targets: TargetLanguageConfig[];
+  verbose?: boolean;
 }
 
 function parseCommandLine(): ConfigFile {
@@ -38,6 +40,7 @@ function parseCommandLine(): ConfigFile {
     .description('A utility for automated translation of strings for localizable software')
     .version('1.0.0')
     .option('--config <path>', 'Optional path to the config file to use', 'autotranslate.json')
+    .option('-v, --verbose', 'Show details of the configuration and the progress of the translations')
     .parse();
 
   const options = program.opts() as CliOptions;
@@ -75,6 +78,8 @@ function parseCommandLine(): ConfigFile {
       config.batchSize = 15; // Default batch size
     }
 
+    config.verbose = options.verbose || config.verbose;
+
     return config;
   } catch (error) {
     if (error instanceof Error) {
@@ -89,24 +94,30 @@ function parseCommandLine(): ConfigFile {
 async function main() {
   const config = parseCommandLine();
 
-  console.log(`Autotranslate starting...`);
-  console.log(`Source file: ${config.source.file}`);
-  console.log(`Target languages: ${config.targets.map((t) => `${t.language} (${t.file})`).join(', ')}`);
-  console.log(`Batch size: ${config.batchSize}`);
+  if (config.verbose) {
+    console.log(`Autotranslate starting...`);
+    console.log(`Source file: ${config.source.file}`);
+    console.log(`Target languages: ${config.targets.map((t) => `${t.language} (${t.file})`).join(', ')}`);
+    console.log(`Batch size: ${config.batchSize}`);
 
-  if (config.instructions) {
-    console.log(`Global instructions file: ${config.instructions}`);
-  }
+    if (config.instructions) {
+      console.log(`Global instructions file: ${config.instructions}`);
+    }
 
-  const languageInstructionCount = config.targets.filter((t) => t.instructions).length;
-  if (languageInstructionCount > 0) {
-    console.log(`Language-specific instruction files: ${languageInstructionCount}`);
+    const languageInstructionCount = config.targets.filter((t) => t.instructions).length;
+    if (languageInstructionCount > 0) {
+      console.log(`Language-specific instruction files: ${languageInstructionCount}`);
+    }
   }
 
   // Step 1: Read source-language CSV file (hashes calculated during read)
-  console.log(`\nReading source file: ${config.source.file}`);
+  if (config.verbose) {
+    console.log(`\nReading source file: ${config.source.file}`);
+  }
   const sourceRecords = await readSourceCsv(config.source.file);
-  console.log(`Found ${sourceRecords.length} source strings`);
+  if (config.verbose) {
+    console.log(`Found ${sourceRecords.length} source strings`);
+  }
 
   // Step 2: Create source map for easy lookup
   const sourceMap = new Map<string, SourceRecord>();
@@ -116,10 +127,19 @@ async function main() {
 
   // Step 3: Process each target language
   for (const target of config.targets) {
-    await processTargetLanguage(target, sourceMap, config.instructions, target.instructions, config.batchSize!);
+    await processTargetLanguage(
+      target,
+      sourceMap,
+      config.instructions,
+      target.instructions,
+      config.batchSize!,
+      config.verbose!
+    );
   }
 
-  console.log('\nAutotranslate completed successfully!');
+  if (config.verbose) {
+    console.log('\nAutotranslate completed successfully!');
+  }
 }
 
 async function processTargetLanguage(
@@ -127,9 +147,12 @@ async function processTargetLanguage(
   sourceMap: Map<string, SourceRecord>,
   globalInstructionsFile?: string,
   languageInstructionsFile?: string,
-  batchSize: number = 15
+  batchSize: number = 15,
+  verbose: boolean = false
 ) {
-  console.log(`\nProcessing ${target.language} (${target.file})`);
+  if (verbose) {
+    console.log(`\nProcessing ${target.language} (${target.file})`);
+  }
 
   // Step 3.1: Read existing target language CSV file
   const existingRecords = await readTargetCsv(target.file);
@@ -138,13 +161,15 @@ async function processTargetLanguage(
     existingMap.set(record.key, record);
   }
 
-  console.log(`Found ${existingRecords.length} existing ${target.language} strings`);
+  if (verbose) {
+    console.log(`Found ${existingRecords.length} existing ${target.language} strings`);
+  }
 
   // Step 3.2: Remove rows for keys that don't exist in source
   const validKeys = new Set(sourceMap.keys());
   const filteredExisting = existingRecords.filter((record) => {
     const isValid = validKeys.has(record.key);
-    if (!isValid) {
+    if (!isValid && verbose) {
       console.log(`Removing obsolete key: ${record.key}`);
     }
     return isValid;
@@ -161,7 +186,9 @@ async function processTargetLanguage(
     }
   }
 
-  console.log(`Need to translate ${stringsToTranslate.length} strings for ${target.language}`);
+  if (verbose) {
+    console.log(`Need to translate ${stringsToTranslate.length} strings for ${target.language}`);
+  }
 
   // Step 3.4: Translate strings using OpenAI API
   const translator = new Translator(target.language, globalInstructionsFile, languageInstructionsFile);
@@ -179,10 +206,14 @@ async function processTargetLanguage(
   // Translate new/changed strings in batches (or individually if batchSize is 1)
   if (batchSize === 1) {
     // Individual translation mode
-    console.log(`Translating ${stringsToTranslate.length} strings individually (batch size = 1)`);
+    if (verbose) {
+      console.log(`Translating ${stringsToTranslate.length} strings individually (batch size = 1)`);
+    }
 
     for (const { key, sourceRecord } of stringsToTranslate) {
-      console.log(`Translating: ${key}`);
+      if (verbose) {
+        console.log(`Translating: ${key}`);
+      }
 
       try {
         const translatedText = await translator.translate(sourceRecord.text, sourceRecord.description);
@@ -193,10 +224,12 @@ async function processTargetLanguage(
           hash: sourceRecord.hash,
         });
 
-        console.log(`  ✓ ${key}: ${sourceRecord.text} → ${translatedText}`);
+        if (verbose) {
+          console.log(`  ✓ ${key}: ${sourceRecord.text} → ${translatedText}`);
+        }
       } catch (error) {
         console.error(
-          `  ✗ Failed to translate "${sourceRecord.text}": ${error instanceof Error ? error.message : String(error)}`
+          `Failed to translate "${sourceRecord.text}": ${error instanceof Error ? error.message : String(error)}`
         );
         throw error;
       }
@@ -219,7 +252,9 @@ async function processTargetLanguage(
       const batchStart = batchIndex * batchSize + 1;
       const batchEnd = Math.min((batchIndex + 1) * batchSize, stringsToTranslate.length);
 
-      console.log(`Translating batch ${batchIndex + 1}/${batches.length} (strings ${batchStart}-${batchEnd})`);
+      if (verbose) {
+        console.log(`Translating batch ${batchIndex + 1}/${batches.length} (strings ${batchStart}-${batchEnd})`);
+      }
 
       try {
         const translations = await translator.translateBatch(batch);
@@ -239,15 +274,21 @@ async function processTargetLanguage(
             hash: sourceRecord.hash, // Use the pre-calculated hash
           });
 
-          console.log(`  ✓ ${key}: ${sourceRecord.text} → ${translatedText}`);
+          if (verbose) {
+            console.log(`  ✓ ${key}: ${sourceRecord.text} → ${translatedText}`);
+          }
         }
       } catch (error) {
-        console.error(`  ✗ Batch translation failed: ${error instanceof Error ? error.message : String(error)}`);
-        console.log(`  Falling back to individual translations for this batch...`);
+        console.error(`Batch translation failed: ${error instanceof Error ? error.message : String(error)}`);
+        if (verbose) {
+          console.log(`Falling back to individual translations for this batch...`);
+        }
 
         // Fallback to individual translations for this batch
         for (const { key, text, description } of batch) {
-          console.log(`  Translating individually: ${key}`);
+          if (verbose) {
+            console.log(`  Translating individually: ${key}`);
+          }
 
           try {
             const sourceRecord = stringsToTranslate.find((s) => s.key === key)?.sourceRecord;
@@ -263,10 +304,12 @@ async function processTargetLanguage(
               hash: sourceRecord.hash,
             });
 
-            console.log(`    ✓ ${key}: ${text} → ${translatedText}`);
+            if (verbose) {
+              console.log(`    ✓ ${key}: ${text} → ${translatedText}`);
+            }
           } catch (individualError) {
             console.error(
-              `    ✗ Failed to translate "${text}": ${individualError instanceof Error ? individualError.message : String(individualError)}`
+              `Failed to translate "${text}": ${individualError instanceof Error ? individualError.message : String(individualError)}`
             );
             throw individualError;
           }
@@ -280,7 +323,9 @@ async function processTargetLanguage(
 
   // Step 3.5: Write updated target language file
   await writeTargetCsv(target.file, updatedRecords);
-  console.log(`Updated ${target.file} with ${updatedRecords.length} strings`);
+  if (verbose) {
+    console.log(`Updated ${target.file} with ${updatedRecords.length} strings`);
+  }
 }
 
 main().catch((error) => {

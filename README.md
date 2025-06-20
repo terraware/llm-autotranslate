@@ -21,6 +21,9 @@ Options:
 
 - `--config <path>`: Optional path to the config file to use. If not specified,
   defaults to `autotranslate.json`.
+- `--verbose` or `-v`: Show details of the configuration and the progress of
+  the translations. Default is to run silently unless there's an error. Verbose
+  mode may also be enabled in the config file.
 
 ## Overview
 
@@ -104,7 +107,8 @@ are optional as noted below.
             "file": "<path>"
             "instructions": "<path>",
         }
-    ]
+    ],
+    "verbose": <boolean>
 }
 ```
 
@@ -132,3 +136,6 @@ formality to use in translations.
 `targets[].instructions` (optional) is the path of a text file with instructions
 to include with translation requests for this language. For example, it can
 contain a list of specific translations to use for project-specific terminology.
+
+`verbose` (optional) enables verbose logging of progress and configuration.
+Verbose mode may also be enabled via command-line option.
