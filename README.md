@@ -93,6 +93,7 @@ are optional as noted below.
 
 ```json
 {
+    "batchSize": <number>,
     "instructions": "<path>",
     "source": {
         "file": "<path>",
@@ -109,6 +110,10 @@ are optional as noted below.
 
 Explanations of each of the properties, with the property names in JavaScript
 notation:
+
+`batchSize` (optional) is the number of strings to translate at a time. Default
+is 15. If this is set to 1, batching is disabled. Batching is faster and cheaper
+but can cause different translations to be generated.
 
 `instructions` (optional) is the path of a text file with instructions to include
 with translation requests for all languages. For example, it can include
