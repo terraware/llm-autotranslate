@@ -104,12 +104,24 @@ are optional as noted below.
     "instructions": "<path>",
     "source": {
         "file": "<path>",
+        "outputs": [
+            {
+                "format": "<format name>",
+                "file": "<path>"
+            }
+        ]
     },
     "targets": [
         {
             "language": "<language name>",
             "file": "<path>"
             "instructions": "<path>",
+            "outputs": [
+                {
+                    "format": "<format name>",
+                    "file": "<path>"
+                }
+            ]
         }
     ],
     "verbose": <boolean>
@@ -130,6 +142,9 @@ formality to use in translations.
 
 `source.file` (required) is the path of the source CSV file.
 
+`source.outputs` (optional) is a list of files in alternate formats to generate
+from the source language. See "Outputs" below.
+
 `targets` is a list of information about each target language.
 
 `targets[].language` (required) is the English name of the language, e.g.,
@@ -141,5 +156,40 @@ formality to use in translations.
 to include with translation requests for this language. For example, it can
 contain a list of specific translations to use for project-specific terminology.
 
+`targets[].outputs` (optional) is a list of files in alternate formats to generate
+for the target language. See "Outputs" below.
+
 `verbose` (optional) enables verbose logging of progress and configuration.
 Verbose mode may also be enabled via command-line option.
+
+### Outputs
+
+The CSV files are considered the source of truth. Autotranslate will always read
+and write them.
+
+In addition, autotranslate can write strings for the source and target languages
+to additional output files.
+
+Each output specification has a `file` value with the path of the output file and
+a `format` value that controls what kind of file is generated.
+
+List of supported formats, each of which is described in more detail below:
+
+- `javascript-const`
+
+#### javascript-const
+
+Produces a JavaScript source file that exports a constant `strings` that is an
+object where the keys are the string keys and the values are the text. If a
+string has a description, it is included as a comment on the line before the
+key/value pair.
+
+Example:
+
+```javascript
+export const strings = {
+  ABC: 'Some text',
+  // Description for key DEF
+  DEF: 'Some other text',
+};
+```

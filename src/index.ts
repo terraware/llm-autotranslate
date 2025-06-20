@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
-import { readFileSync, unwatchFile, watchFile } from 'fs';
+import { existsSync, readFileSync, unwatchFile, watchFile, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
 import { SourceRecord, TargetRecord, readSourceCsv, readTargetCsv, writeTargetCsv } from './csv.js';
+import { StringRecord, outputRegistry } from './formats.js';
 import { needsTranslation } from './hash.js';
 import { ConsoleLogger, Logger } from './logger.js';
 import { BatchTranslationRequest, Translator } from './translator.js';
@@ -23,10 +24,16 @@ interface CliOptions {
   watch: boolean;
 }
 
+export interface OutputSpec {
+  format: string;
+  file: string;
+}
+
 export interface TargetLanguageConfig {
   language: string;
   file: string;
   instructions?: string;
+  outputs?: OutputSpec[];
 }
 
 export interface AutotranslateConfig {
@@ -34,6 +41,7 @@ export interface AutotranslateConfig {
   instructions?: string;
   source: {
     file: string;
+    outputs?: OutputSpec[];
   };
   targets: TargetLanguageConfig[];
   verbose?: boolean;
@@ -130,6 +138,9 @@ export async function autotranslate(config: AutotranslateConfig): Promise<void> 
   const sourceRecords = await readSourceCsv(finalConfig.source.file);
   logger.log(`Found ${sourceRecords.length} source strings`);
 
+  // Generate source output files
+  generateOutputFiles(finalConfig.source.outputs, sourceRecords, logger, 'source');
+
   // Step 2: Create source map for easy lookup
   const sourceMap = new Map<string, SourceRecord>();
   for (const record of sourceRecords) {
@@ -215,6 +226,48 @@ async function runWatchMode(config: ConfigFile) {
 interface TranslationCandidate {
   key: string;
   sourceRecord: SourceRecord;
+}
+
+function generateOutputFiles(
+  outputs: OutputSpec[] | undefined,
+  records: SourceRecord[] | TargetRecord[],
+  logger: Logger,
+  context: string,
+  forceGenerate: boolean = true
+): void {
+  if (!outputs || outputs.length === 0) {
+    return;
+  }
+
+  for (const output of outputs) {
+    try {
+      // Skip if file exists and we're not forcing generation
+      if (!forceGenerate && existsSync(output.file)) {
+        continue;
+      }
+
+      const formatter = outputRegistry.get(output.format);
+      if (!formatter) {
+        logger.error(`Unknown output format: ${output.format}`);
+        continue;
+      }
+
+      // Convert records to StringRecord format
+      const stringRecords: StringRecord[] = records.map((record) => ({
+        key: record.key,
+        text: record.text,
+        description: (record as SourceRecord).description,
+      }));
+
+      const content = formatter.format(stringRecords);
+      writeFileSync(output.file, content, 'utf-8');
+      logger.log(`Generated ${output.format} output: ${output.file}`);
+    } catch (error) {
+      logger.error(
+        `Failed to generate ${output.format} output ${output.file}: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
 }
 
 async function readAndFilterExistingRecords(
@@ -431,6 +484,13 @@ async function processTargetLanguage(
   // Check if any changes are needed (no translations needed and no records removed)
   if (candidates.length === 0 && removedCount === 0) {
     logger.log(`No changes needed for ${target.file}`);
+
+    // Generate output files only if they don't exist
+    if (target.outputs && target.outputs.length > 0) {
+      const existingRecords = preserveExistingTranslations(filteredExisting, sourceMap);
+      generateOutputFiles(target.outputs, existingRecords, logger, `target (${target.language})`, false);
+    }
+
     return;
   }
 
@@ -447,6 +507,9 @@ async function processTargetLanguage(
   // Step 5: Sort and write updated records
   updatedRecords.sort((a, b) => a.key.localeCompare(b.key));
   await writeTargetCsv(target.file, updatedRecords);
+
+  // Generate target output files
+  generateOutputFiles(target.outputs, updatedRecords, logger, `target (${target.language})`);
 
   logger.log(`Updated ${target.file} with ${updatedRecords.length} strings`);
 }
