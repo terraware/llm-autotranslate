@@ -175,14 +175,30 @@ a `format` value that controls what kind of file is generated.
 
 List of supported formats, each of which is described in more detail below:
 
+- `java-properties`
 - `javascript-const`
+
+#### java-properties
+
+Produces a Java properties file for use as a PropertyResourceBundle. The keys are
+the sting keys and the values are the text, with special characters properly
+quoted. If a string has a description, it is included as a comment on the line
+before the key/value pair, but only for the source language.
+
+Example:
+
+```
+ABC=Some text\: it''s quoted
+# Description for key DEF
+DEF=Some other text
+```
 
 #### javascript-const
 
 Produces a JavaScript source file that exports a constant `strings` that is an
 object where the keys are the string keys and the values are the text. If a
 string has a description, it is included as a comment on the line before the
-key/value pair.
+key/value pair, but only for the source language.
 
 Example:
 
