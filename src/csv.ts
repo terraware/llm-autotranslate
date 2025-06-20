@@ -18,95 +18,46 @@ export interface TargetRecord {
   hash: string;
 }
 
-export async function readSourceCsv(filePath: string): Promise<SourceRecord[]> {
-  if (!existsSync(filePath)) {
-    throw new Error(`Source file not found: ${filePath}`);
-  }
-
-  return new Promise((resolve, reject) => {
-    const records: SourceRecord[] = [];
-
-    createReadStream(filePath)
-      .pipe(
-        csvParser({
-          // Let csv-parser read headers from the file
-        })
-      )
-      .on('data', (chunk) => {
-        try {
-          // Get the actual column names from the first row
-          const columnNames = Object.keys(chunk);
-
-          // Access columns by position: 0=key, 1=text, 2=description
-          const key = chunk[columnNames[0]] || '';
-          const text = chunk[columnNames[1]] || '';
-          const description = chunk[columnNames[2]] || '';
-
-          // Skip rows with empty key or text
-          if (!key.trim() || !text.trim()) {
-            return;
-          }
-
-          const record: SourceRecord = {
-            key: key.trim(),
-            text: text.trim(),
-            description: description.trim(),
-            hash: calculateHash(text.trim(), description.trim()),
-          };
-
-          records.push(record);
-        } catch (error) {
-          reject(new Error(`Error processing row: ${error instanceof Error ? error.message : String(error)}`));
-        }
-      })
-      .on('end', () => {
-        resolve(records);
-      })
-      .on('error', (error) => {
-        reject(new Error(`Failed to read CSV file ${filePath}: ${error.message}`));
-      });
-  });
+interface CsvRow {
+  [columnName: string]: string;
 }
 
-export async function readTargetCsv(filePath: string): Promise<TargetRecord[]> {
+type RowMapper<T> = (columns: string[]) => T | null;
+
+async function readCsvFile<T>(
+  filePath: string,
+  rowMapper: RowMapper<T>,
+  options: {
+    throwOnMissing?: boolean;
+    errorContext?: string;
+  } = {}
+): Promise<T[]> {
+  const { throwOnMissing = true, errorContext = 'CSV' } = options;
+
   if (!existsSync(filePath)) {
+    if (throwOnMissing) {
+      throw new Error(`${errorContext} file not found: ${filePath}`);
+    }
     return [];
   }
 
   return new Promise((resolve, reject) => {
-    const records: TargetRecord[] = [];
+    const records: T[] = [];
 
     createReadStream(filePath)
-      .pipe(
-        csvParser({
-          // Let csv-parser read headers from the file
-        })
-      )
-      .on('data', (chunk) => {
+      .pipe(csvParser())
+      .on('data', (chunk: CsvRow) => {
         try {
-          // Get the actual column names from the first row
           const columnNames = Object.keys(chunk);
+          const columns = columnNames.map((name) => (chunk[name] || '').trim());
 
-          // Access columns by position: 0=key, 1=text, 2=hash
-          const key = chunk[columnNames[0]] || '';
-          const text = chunk[columnNames[1]] || '';
-          const hash = chunk[columnNames[2]] || '';
-
-          // Skip rows with empty key or text
-          if (!key.trim() || !text.trim()) {
-            return;
+          const record = rowMapper(columns);
+          if (record !== null) {
+            records.push(record);
           }
-
-          const record: TargetRecord = {
-            key: key.trim(),
-            text: text.trim(),
-            hash: hash.trim(),
-          };
-
-          records.push(record);
         } catch (error) {
           reject(
-            new Error(`Error processing target CSV row: ${error instanceof Error ? error.message : String(error)}`)
+            new Error(`Error processing ${errorContext} row: ${error instanceof Error ? error.message : String(error)}`)
           );
         }
       })
@@ -114,9 +65,52 @@ export async function readTargetCsv(filePath: string): Promise<TargetRecord[]> {
         resolve(records);
       })
       .on('error', (error) => {
-        reject(new Error(`Failed to read target CSV file ${filePath}: ${error.message}`));
+        reject(new Error(`Failed to read ${errorContext} file ${filePath}: ${error.message}`));
       });
   });
+}
+
+export async function readSourceCsv(filePath: string): Promise<SourceRecord[]> {
+  return readCsvFile(
+    filePath,
+    (columns: string[]) => {
+      const [key, text, description] = columns;
+
+      // Skip rows with empty key or text
+      if (!key || !text) {
+        return null;
+      }
+
+      return {
+        key,
+        text,
+        description: description || '',
+        hash: calculateHash(text, description || ''),
+      };
+    },
+    { throwOnMissing: true, errorContext: 'Source CSV' }
+  );
+}
+
+export async function readTargetCsv(filePath: string): Promise<TargetRecord[]> {
+  return readCsvFile(
+    filePath,
+    (columns: string[]) => {
+      const [key, text, hash] = columns;
+
+      // Skip rows with empty key or text
+      if (!key || !text) {
+        return null;
+      }
+
+      return {
+        key,
+        text,
+        hash: hash || '',
+      };
+    },
+    { throwOnMissing: false, errorContext: 'Target CSV' }
+  );
 }
 
 export async function writeTargetCsv(filePath: string, records: TargetRecord[]): Promise<void> {
