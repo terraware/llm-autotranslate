@@ -1,0 +1,5 @@
+Key,Text,Description
+welcome_message,Welcome to our application!,Greeting shown to new users
+save_button,Save,Button label for saving data
+error_network,Unable to connect to the server,Error message when network fails
+confirm_delete,Are you sure you want to delete this item?,Confirmation dialog for deletion

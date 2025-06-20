@@ -1,0 +1,15 @@
+{
+  "source": {
+    "file": "test/source.csv"
+  },
+  "targets": [
+    {
+      "language": "Spanish",
+      "file": "test/spanish.csv"
+    },
+    {
+      "language": "French",
+      "file": "test/french.csv"
+    }
+  ]
+}
