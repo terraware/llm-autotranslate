@@ -85,13 +85,11 @@ following pieces:
   `src/preamble.txt`. The string `{LANGUAGE}` in the preamble is replaced with
   the name of the target language.
 - An optional file with project-specific, but not language-specific, instructions.
-  This is specified on the command line when autotranslate is run.
-- An optional file with language-specific instructions. This is specified for each
-  language on the command line when autotranslate is run.
+- An optional file with language-specific instructions.
 
 The instructions are the same for each OpenAI API request. The prompt changes from
 request to request and includes the text and description, propertly delimited as
-described in the instructions.
+described in the preamble.
 
 ## Config file
 
