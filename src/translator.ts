@@ -1,6 +1,6 @@
 import { readFileSync } from 'fs';
 import OpenAI from 'openai';
-import { zodResponseFormat } from 'openai/helpers/zod';
+import { zodTextFormat } from 'openai/helpers/zod';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { z } from 'zod';
@@ -95,9 +95,9 @@ export class Translator {
     }
 
     try {
-      const response = await this.openai.beta.chat.completions.parse({
+      const response = await this.openai.responses.parse({
         model: 'gpt-4.1',
-        messages: [
+        input: [
           {
             role: 'system',
             content: this.instructions,
@@ -107,10 +107,13 @@ export class Translator {
             content: prompt,
           },
         ],
-        response_format: zodResponseFormat(TranslationResponse, 'translation'),
+        text: {
+          format: zodTextFormat(TranslationResponse, 'translation'),
+        },
+        temperature: 0,
       });
 
-      const parsed = response.choices[0].message.parsed;
+      const parsed = response.output_parsed;
       if (!parsed || !parsed.translation) {
         throw new Error('Invalid response format from OpenAI API');
       }
@@ -143,9 +146,9 @@ export class Translator {
     const prompt = promptParts.join('\n');
 
     try {
-      const response = await this.openai.beta.chat.completions.parse({
+      const response = await this.openai.responses.parse({
         model: 'gpt-4.1',
-        messages: [
+        input: [
           {
             role: 'system',
             content: this.instructions,
@@ -155,10 +158,13 @@ export class Translator {
             content: prompt,
           },
         ],
-        response_format: zodResponseFormat(BatchTranslationResponse, 'batch_translation'),
+        text: {
+          format: zodTextFormat(BatchTranslationResponse, 'batch_translation'),
+        },
+        temperature: 0,
       });
 
-      const parsed = response.choices[0].message.parsed;
+      const parsed = response.output_parsed;
       if (!parsed || !parsed.translations) {
         throw new Error('Invalid response format from OpenAI API');
       }
