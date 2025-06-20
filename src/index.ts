@@ -8,6 +8,10 @@ import { SourceRecord, TargetRecord, readSourceCsv, readTargetCsv, writeTargetCs
 import { needsTranslation } from './hash.js';
 import { BatchTranslationRequest, Translator } from './translator.js';
 
+// Re-export useful types for library users
+export { SourceRecord, TargetRecord } from './csv.js';
+export { Translator } from './translator.js';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -16,13 +20,13 @@ interface CliOptions {
   verbose: boolean;
 }
 
-interface TargetLanguageConfig {
+export interface TargetLanguageConfig {
   language: string;
   file: string;
   instructions?: string;
 }
 
-interface ConfigFile {
+export interface AutotranslateConfig {
   batchSize?: number;
   instructions?: string;
   source: {
@@ -31,6 +35,8 @@ interface ConfigFile {
   targets: TargetLanguageConfig[];
   verbose?: boolean;
 }
+
+interface ConfigFile extends AutotranslateConfig {}
 
 function parseCommandLine(): ConfigFile {
   const program = new Command();
@@ -50,34 +56,7 @@ function parseCommandLine(): ConfigFile {
     const configContent = readFileSync(options.config, 'utf-8');
     const config = JSON.parse(configContent) as ConfigFile;
 
-    // Validate required fields
-    if (!config.source?.file) {
-      console.error('Error: Config file must specify source.file');
-      process.exit(1);
-    }
-
-    if (!config.targets || config.targets.length === 0) {
-      console.error('Error: Config file must specify at least one target language');
-      process.exit(1);
-    }
-
-    for (const target of config.targets) {
-      if (!target.language || !target.file) {
-        console.error('Error: Each target must specify both language and file');
-        process.exit(1);
-      }
-    }
-
-    // Validate and set default batch size
-    if (config.batchSize !== undefined) {
-      if (!Number.isInteger(config.batchSize) || config.batchSize < 1) {
-        console.error('Error: batchSize must be a positive integer');
-        process.exit(1);
-      }
-    } else {
-      config.batchSize = 15; // Default batch size
-    }
-
+    // Set verbose mode - command line option overrides config file
     config.verbose = options.verbose || config.verbose;
 
     return config;
@@ -91,31 +70,57 @@ function parseCommandLine(): ConfigFile {
   }
 }
 
-async function main() {
-  const config = parseCommandLine();
+export async function autotranslate(config: AutotranslateConfig): Promise<void> {
+  // Set defaults
+  const finalConfig = {
+    batchSize: config.batchSize ?? 15,
+    instructions: config.instructions,
+    source: config.source,
+    targets: config.targets,
+    verbose: config.verbose ?? false,
+  };
 
-  if (config.verbose) {
+  // Validate configuration
+  if (!finalConfig.source?.file) {
+    throw new Error('Config must specify source.file');
+  }
+
+  if (!finalConfig.targets || finalConfig.targets.length === 0) {
+    throw new Error('Config must specify at least one target language');
+  }
+
+  for (const target of finalConfig.targets) {
+    if (!target.language || !target.file) {
+      throw new Error('Each target must specify both language and file');
+    }
+  }
+
+  if (!Number.isInteger(finalConfig.batchSize) || finalConfig.batchSize < 1) {
+    throw new Error('batchSize must be a positive integer');
+  }
+
+  if (finalConfig.verbose) {
     console.log(`Autotranslate starting...`);
-    console.log(`Source file: ${config.source.file}`);
-    console.log(`Target languages: ${config.targets.map((t) => `${t.language} (${t.file})`).join(', ')}`);
-    console.log(`Batch size: ${config.batchSize}`);
+    console.log(`Source file: ${finalConfig.source.file}`);
+    console.log(`Target languages: ${finalConfig.targets.map((t) => `${t.language} (${t.file})`).join(', ')}`);
+    console.log(`Batch size: ${finalConfig.batchSize}`);
 
-    if (config.instructions) {
-      console.log(`Global instructions file: ${config.instructions}`);
+    if (finalConfig.instructions) {
+      console.log(`Global instructions file: ${finalConfig.instructions}`);
     }
 
-    const languageInstructionCount = config.targets.filter((t) => t.instructions).length;
+    const languageInstructionCount = finalConfig.targets.filter((t) => t.instructions).length;
     if (languageInstructionCount > 0) {
       console.log(`Language-specific instruction files: ${languageInstructionCount}`);
     }
   }
 
   // Step 1: Read source-language CSV file (hashes calculated during read)
-  if (config.verbose) {
-    console.log(`\nReading source file: ${config.source.file}`);
+  if (finalConfig.verbose) {
+    console.log(`\nReading source file: ${finalConfig.source.file}`);
   }
-  const sourceRecords = await readSourceCsv(config.source.file);
-  if (config.verbose) {
+  const sourceRecords = await readSourceCsv(finalConfig.source.file);
+  if (finalConfig.verbose) {
     console.log(`Found ${sourceRecords.length} source strings`);
   }
 
@@ -126,19 +131,29 @@ async function main() {
   }
 
   // Step 3: Process each target language
-  for (const target of config.targets) {
+  for (const target of finalConfig.targets) {
     await processTargetLanguage(
       target,
       sourceMap,
-      config.instructions,
+      finalConfig.instructions,
       target.instructions,
-      config.batchSize!,
-      config.verbose!
+      finalConfig.batchSize,
+      finalConfig.verbose
     );
   }
 
-  if (config.verbose) {
+  if (finalConfig.verbose) {
     console.log('\nAutotranslate completed successfully!');
+  }
+}
+
+async function main() {
+  try {
+    const config = parseCommandLine();
+    await autotranslate(config);
+  } catch (error) {
+    console.error('Error:', error instanceof Error ? error.message : String(error));
+    process.exit(1);
   }
 }
 
@@ -328,7 +343,10 @@ async function processTargetLanguage(
   }
 }
 
-main().catch((error) => {
-  console.error('Error:', error.message);
-  process.exit(1);
-});
+// Only run main if this file is executed directly (not imported as a library)
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch((error) => {
+    console.error('Error:', error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  });
+}
