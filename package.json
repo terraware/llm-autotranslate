@@ -1,0 +1,35 @@
+{
+  "name": "autotranslate",
+  "version": "1.0.0",
+  "description": "A utility for automated translation of strings for localizable software",
+  "main": "dist/index.js",
+  "bin": {
+    "autotranslate": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc && cp src/preamble.txt dist/",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "commander": "^11.1.0",
+    "csv-parser": "^3.0.0",
+    "csv-writer": "^1.6.0",
+    "openai": "^4.28.4",
+    "xxhashjs": "^0.2.2",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@trivago/prettier-plugin-sort-imports": "^4.3.0",
+    "@types/node": "^20.11.19",
+    "@types/xxhashjs": "^0.2.4",
+    "prettier": "^3.5.3",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
