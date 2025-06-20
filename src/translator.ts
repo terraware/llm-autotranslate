@@ -12,10 +12,27 @@ const TranslationResponse = z.object({
   translation: z.string().describe('The translated text'),
 });
 
+const BatchTranslationResponse = z.object({
+  translations: z
+    .array(
+      z.object({
+        key: z.string().describe('The key of the string being translated'),
+        translation: z.string().describe('The translated text'),
+      })
+    )
+    .describe('Array of translations for the provided strings'),
+});
+
 export interface TranslationRequest {
   text: string;
   description: string;
   targetLanguage: string;
+}
+
+export interface BatchTranslationRequest {
+  key: string;
+  text: string;
+  description: string;
 }
 
 export class Translator {
@@ -79,7 +96,7 @@ export class Translator {
 
     try {
       const response = await this.openai.beta.chat.completions.parse({
-        model: 'gpt-4o-2024-08-06',
+        model: 'gpt-4.1',
         messages: [
           {
             role: 'system',
@@ -104,6 +121,66 @@ export class Translator {
         throw new Error(`Translation failed: ${error.message}`);
       }
       throw new Error('Translation failed with unknown error');
+    }
+  }
+
+  async translateBatch(requests: BatchTranslationRequest[]): Promise<Map<string, string>> {
+    if (requests.length === 0) {
+      return new Map();
+    }
+
+    // Build the batch prompt
+    const promptParts = ['Translate these strings:'];
+
+    for (const request of requests) {
+      promptParts.push(`\n###${request.key}###`);
+      promptParts.push(request.text);
+      if (request.description.trim()) {
+        promptParts.push(`Description: ${request.description}`);
+      }
+    }
+
+    const prompt = promptParts.join('\n');
+
+    try {
+      const response = await this.openai.beta.chat.completions.parse({
+        model: 'gpt-4.1',
+        messages: [
+          {
+            role: 'system',
+            content: this.instructions,
+          },
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        response_format: zodResponseFormat(BatchTranslationResponse, 'batch_translation'),
+      });
+
+      const parsed = response.choices[0].message.parsed;
+      if (!parsed || !parsed.translations) {
+        throw new Error('Invalid response format from OpenAI API');
+      }
+
+      // Convert to Map for easy lookup
+      const resultMap = new Map<string, string>();
+      for (const translation of parsed.translations) {
+        resultMap.set(translation.key, translation.translation);
+      }
+
+      // Validate that we got translations for all requested keys
+      const missingKeys = requests.filter((req) => !resultMap.has(req.key)).map((req) => req.key);
+      if (missingKeys.length > 0) {
+        throw new Error(`Missing translations for keys: ${missingKeys.join(', ')}`);
+      }
+
+      return resultMap;
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`Batch translation failed: ${error.message}`);
+      }
+      throw new Error('Batch translation failed with unknown error');
     }
   }
 }
