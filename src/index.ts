@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 
 import { SourceRecord, TargetRecord, readSourceCsv, readTargetCsv, writeTargetCsv } from './csv.js';
 import { needsTranslation } from './hash.js';
-import { Translator } from './translator.js';
+import { BatchTranslationRequest, Translator } from './translator.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -163,25 +163,76 @@ async function processTargetLanguage(
     }
   }
 
-  // Translate new/changed strings
-  for (const { key, sourceRecord } of stringsToTranslate) {
-    console.log(`Translating: ${key}`);
+  // Translate new/changed strings in batches
+  const BATCH_SIZE = 15;
+  const batches: BatchTranslationRequest[][] = [];
+
+  for (let i = 0; i < stringsToTranslate.length; i += BATCH_SIZE) {
+    const batch = stringsToTranslate.slice(i, i + BATCH_SIZE).map(({ key, sourceRecord }) => ({
+      key,
+      text: sourceRecord.text,
+      description: sourceRecord.description,
+    }));
+    batches.push(batch);
+  }
+
+  for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+    const batch = batches[batchIndex];
+    const batchStart = batchIndex * BATCH_SIZE + 1;
+    const batchEnd = Math.min((batchIndex + 1) * BATCH_SIZE, stringsToTranslate.length);
+
+    console.log(`Translating batch ${batchIndex + 1}/${batches.length} (strings ${batchStart}-${batchEnd})`);
 
     try {
-      const translatedText = await translator.translate(sourceRecord.text, sourceRecord.description);
+      const translations = await translator.translateBatch(batch);
 
-      updatedRecords.push({
-        key,
-        text: translatedText,
-        hash: sourceRecord.hash, // Use the pre-calculated hash
-      });
+      for (const { key, sourceRecord } of stringsToTranslate.slice(
+        batchIndex * BATCH_SIZE,
+        batchIndex * BATCH_SIZE + batch.length
+      )) {
+        const translatedText = translations.get(key);
+        if (!translatedText) {
+          throw new Error(`Missing translation for key: ${key}`);
+        }
 
-      console.log(`  ✓ Translated: ${sourceRecord.text} → ${translatedText}`);
+        updatedRecords.push({
+          key,
+          text: translatedText,
+          hash: sourceRecord.hash, // Use the pre-calculated hash
+        });
+
+        console.log(`  ✓ ${key}: ${sourceRecord.text} → ${translatedText}`);
+      }
     } catch (error) {
-      console.error(
-        `  ✗ Failed to translate "${sourceRecord.text}": ${error instanceof Error ? error.message : String(error)}`
-      );
-      throw error;
+      console.error(`  ✗ Batch translation failed: ${error instanceof Error ? error.message : String(error)}`);
+      console.log(`  Falling back to individual translations for this batch...`);
+
+      // Fallback to individual translations for this batch
+      for (const { key, text, description } of batch) {
+        console.log(`  Translating individually: ${key}`);
+
+        try {
+          const sourceRecord = stringsToTranslate.find((s) => s.key === key)?.sourceRecord;
+          if (!sourceRecord) {
+            throw new Error(`Could not find source record for key: ${key}`);
+          }
+
+          const translatedText = await translator.translate(text, description);
+
+          updatedRecords.push({
+            key,
+            text: translatedText,
+            hash: sourceRecord.hash,
+          });
+
+          console.log(`    ✓ ${key}: ${text} → ${translatedText}`);
+        } catch (individualError) {
+          console.error(
+            `    ✗ Failed to translate "${text}": ${individualError instanceof Error ? individualError.message : String(individualError)}`
+          );
+          throw individualError;
+        }
+      }
     }
   }
 
