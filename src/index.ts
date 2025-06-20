@@ -221,7 +221,7 @@ async function readAndFilterExistingRecords(
   targetFile: string,
   sourceMap: Map<string, SourceRecord>,
   logger: Logger
-): Promise<{ filteredExisting: TargetRecord[]; existingMap: Map<string, TargetRecord> }> {
+): Promise<{ filteredExisting: TargetRecord[]; existingMap: Map<string, TargetRecord>; removedCount: number }> {
   const existingRecords = await readTargetCsv(targetFile);
   const existingMap = new Map<string, TargetRecord>();
   for (const record of existingRecords) {
@@ -231,15 +231,17 @@ async function readAndFilterExistingRecords(
   logger.log(`Found ${existingRecords.length} existing strings`);
 
   const validKeys = new Set(sourceMap.keys());
+  let removedCount = 0;
   const filteredExisting = existingRecords.filter((record) => {
     const isValid = validKeys.has(record.key);
     if (!isValid) {
       logger.log(`Removing obsolete key: ${record.key}`);
+      removedCount++;
     }
     return isValid;
   });
 
-  return { filteredExisting, existingMap };
+  return { filteredExisting, existingMap, removedCount };
 }
 
 function identifyTranslationCandidates(
@@ -417,10 +419,20 @@ async function processTargetLanguage(
   logger.log(`\nProcessing ${target.language} (${target.file})`);
 
   // Step 1: Read and filter existing records
-  const { filteredExisting, existingMap } = await readAndFilterExistingRecords(target.file, sourceMap, logger);
+  const { filteredExisting, existingMap, removedCount } = await readAndFilterExistingRecords(
+    target.file,
+    sourceMap,
+    logger
+  );
 
   // Step 2: Identify strings that need translation
   const candidates = identifyTranslationCandidates(sourceMap, existingMap, logger, target.language);
+
+  // Check if any changes are needed (no translations needed and no records removed)
+  if (candidates.length === 0 && removedCount === 0) {
+    logger.log(`No changes needed for ${target.file}`);
+    return;
+  }
 
   // Step 3: Preserve existing translations that are still valid
   const updatedRecords = preserveExistingTranslations(filteredExisting, sourceMap);
