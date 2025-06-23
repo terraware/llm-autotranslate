@@ -1,4 +1,4 @@
-import { SourceRecord, TargetRecord } from '../records';
+import { SourceRecord, TargetRecord } from '../records.js';
 
 export interface StringRecord {
   key: string;
