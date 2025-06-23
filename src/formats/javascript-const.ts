@@ -53,15 +53,39 @@ export class JavaScriptConstFormatter implements BidirectionalFormatter {
   }
 
   private parseJavaScriptContent(content: string, isSource: boolean): SourceRecord[] {
+    try {
+      const records = this.parseJavaScriptContentInternal(content, isSource);
+      this.validateTranslationFile(records);
+      return records;
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('line')) {
+        // Already has line info
+        throw error;
+      }
+
+      throw new Error(
+        `Failed to parse JavaScript translation file: ${error instanceof Error ? error.message : String(error)}\n\n` +
+          `Expected format:\n` +
+          `export const strings = {\n` +
+          `  // Optional comment\n` +
+          `  KEY_NAME: 'text value',\n` +
+          `  ANOTHER_KEY: "another value",\n` +
+          `};\n`
+      );
+    }
+  }
+
+  private parseJavaScriptContentInternal(content: string, isSource: boolean): SourceRecord[] {
     const records: SourceRecord[] = [];
     const lines = content.split('\n');
     let currentComment = '';
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
+      const lineNumber = i + 1;
 
-      // Skip empty lines
-      if (!line) {
+      // Skip empty lines and structural elements
+      if (!line || line.startsWith('export') || line.includes('{') || line.includes('}')) {
         continue;
       }
 
@@ -71,35 +95,15 @@ export class JavaScriptConstFormatter implements BidirectionalFormatter {
         continue;
       }
 
-      // Handle key-value pairs - extract key and quoted value
-      const keyValueMatch = line.match(/^(["']?)([^"'\s:]+)\1\s*:\s*(["'])([\s\S]*?)\3\s*,?\s*$/);
-      if (keyValueMatch) {
-        const [, , key, , rawText] = keyValueMatch;
-
-        if (key && rawText !== undefined) {
-          try {
-            // Use JSON.parse to handle string escaping - much more robust!
-            // Convert to JSON format by escaping quotes and wrapping in double quotes
-            const escapedText = rawText.replace(/"/g, '\\"');
-            const jsonValue = `"${escapedText}"`;
-            const text = JSON.parse(jsonValue);
-
-            records.push({
-              key,
-              text,
-              description: currentComment,
-              hash: isSource ? this.calculateHashValue(text, currentComment) : '',
-            });
-          } catch (error) {
-            // Fallback to raw text if JSON parsing fails
-            records.push({
-              key,
-              text: rawText,
-              description: currentComment,
-              hash: isSource ? this.calculateHashValue(rawText, currentComment) : '',
-            });
-          }
+      try {
+        const record = this.parseKeyValueLine(line, currentComment, isSource, lineNumber);
+        if (record) {
+          records.push(record);
         }
+      } catch (error) {
+        throw new Error(
+          `Error parsing line ${lineNumber}: ${error instanceof Error ? error.message : String(error)}\nLine: ${line}`
+        );
       }
 
       // Reset comment after processing a key-value pair
@@ -109,6 +113,76 @@ export class JavaScriptConstFormatter implements BidirectionalFormatter {
     }
 
     return records;
+  }
+
+  private parseKeyValueLine(line: string, comment: string, isSource: boolean, lineNumber: number): SourceRecord | null {
+    // More flexible regex for keys and values
+    const keyValueMatch = line.match(/^(['"]?)(.+?)\1\s*:\s*(['"`])(.*?)\3\s*,?\s*$/);
+
+    if (!keyValueMatch) {
+      return null;
+    }
+
+    const [, , key, valueQuote, rawText] = keyValueMatch;
+    const text = this.parseStringValue(rawText, valueQuote, lineNumber);
+
+    return {
+      key: key.trim(),
+      text,
+      description: comment,
+      hash: isSource ? this.calculateHashValue(text, comment) : '',
+    };
+  }
+
+  private parseStringValue(rawText: string, quote: string, lineNumber: number): string {
+    try {
+      switch (quote) {
+        case '"':
+          // For double quotes, we can use JSON.parse safely
+          return JSON.parse(`"${rawText}"`);
+
+        case "'":
+          // For single quotes, handle escapes manually
+          return rawText
+            .replace(/\\'/g, "'")
+            .replace(/\\\\/g, '\\')
+            .replace(/\\n/g, '\n')
+            .replace(/\\r/g, '\r')
+            .replace(/\\t/g, '\t');
+
+        case '`':
+          throw new Error('Template literals are not supported in translation files');
+
+        default:
+          return rawText;
+      }
+    } catch (error) {
+      throw new Error(
+        `Invalid string value on line ${lineNumber}: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  private validateTranslationFile(records: SourceRecord[]): void {
+    const keys = new Set<string>();
+
+    for (const record of records) {
+      // Check for duplicate keys
+      if (keys.has(record.key)) {
+        throw new Error(`Duplicate key found: "${record.key}"`);
+      }
+      keys.add(record.key);
+
+      // Check for suspiciously empty text values
+      if (record.text.trim().length === 0) {
+        console.warn(`Warning: Empty text value for key "${record.key}"`);
+      }
+
+      // Check for extremely long values that might indicate a mistake
+      if (record.text.length > 1000) {
+        console.warn(`Warning: Very long text value for key "${record.key}" (${record.text.length} characters)`);
+      }
+    }
   }
 
   private calculateHashValue(text: string, description: string): string {
