@@ -1,18 +1,17 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
 import { existsSync, readFileSync, unwatchFile, watchFile, writeFileSync } from 'fs';
-import { dirname, join } from 'path';
+import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 
-import { SourceRecord, TargetRecord } from './csv.js';
 import { readSourceFile, readTargetFile, writeTargetFile } from './file-io.js';
-import { StringRecord, outputRegistry } from './formats.js';
-import { needsTranslation } from './hash.js';
+import { StringRecord } from './formats';
+import { outputRegistry } from './formats/registries.js';
 import { ConsoleLogger, Logger } from './logger.js';
+import { SourceRecord, TargetRecord } from './records.js';
 import { BatchTranslationRequest, Translator } from './translator.js';
 
 // Re-export useful types for library users
-export { SourceRecord, TargetRecord } from './csv.js';
 export { Logger, ConsoleLogger, SilentLogger } from './logger.js';
 export { Translator } from './translator.js';
 
@@ -526,3 +525,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     process.exit(1);
   });
 }
+
+export { SourceRecord } from './records';
+export { TargetRecord } from './records';
