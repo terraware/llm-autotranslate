@@ -22,7 +22,7 @@ Options:
 - `--config <path>`: Optional path to the config file to use. If not specified,
   defaults to `autotranslate.json`.
 - `--watch`: Run continuously, watching for modifications to the source-language
-  CSV file and updating the target-language files as needed. Useful in dev
+  strings file and updating the target-language files as needed. Useful in dev
   environments to automatically keep translations up to date as original strings
   are edited.
 - `--verbose` or `-v`: Show details of the configuration and the progress of
@@ -31,40 +31,22 @@ Options:
 
 ## Overview
 
-Strings are defined in CSV files. There is a CSV file for the source language that
-is edited by hand. Strings may be added to and removed from the source-language CSV,
-or existing strings may be edited.
+Strings are defined in strings files. There is a file for the source language that
+is edited by hand. Strings may be added to and removed from the source-language
+strings file, or existing strings may be edited.
 
-Each target language also has its own CSV file. The target-language CSV files are
-updated by autotranslate. They may also be edited by hand if developers want to
-modify any of the translations.
-
-The CSV files have three columns. They always start with a header line. The files
-use standard CSV formatting, with double quotes omitted if they aren't required.
-
-For the source language CSV, the three columns are:
-
-1. Key: A unique textual identifier for the string.
-2. Text: The string's value. Human-readable text in the file's language.
-3. Description: Optional additional information about the string to help improve
-   translations.
-
-For the target language CSVs, the three columns are:
-
-1. Key: The string's key from the source language CSV.
-2. Text: The translation of the text from the source language CSV.
-3. Hash: A hash of the text and description of the source-language version of
-   the string. The hash uses the xxHash algorithm since it's only used to detect
-   changes to the text and description, not for cryptographic purposes.
+Each target language also has its own file. The target-language files are updated
+by autotranslate. They may also be edited by hand if developers want to modify any
+of the translations.
 
 When you run autotranslate, it does the following:
 
-1. Reads the source-language CSV file.
+1. Reads the source-language strings file.
 2. Calculates the hash of each string+description in the source-language file.
 3. For each of the target languages:
-   1. Reads the target language's CSV file, if it exists.
+   1. Reads the target language's strings file, if it exists.
    2. Removes the rows for any keys that don't exist in the source-language file.
-   3. If a key doesn't exist in the target-language CSV file, OR if the hash that
+   3. If a key doesn't exist in the target-language file, OR if the hash that
       was recorded in the target-language file doesn't match the current hash from
       the source-language file, generates a new translation using the OpenAI API.
    4. Writes the updated target-language file.
@@ -102,10 +84,11 @@ are optional as noted below.
     "instructions": "<path>",
     "source": {
         "file": "<path>",
+        "format": "<format name>",
         "outputs": [
             {
-                "format": "<format name>",
                 "file": "<path>"
+                "format": "<format name>",
             }
         ]
     },
@@ -113,11 +96,12 @@ are optional as noted below.
         {
             "language": "<language name>",
             "file": "<path>"
+            "format": "<format name>",
             "instructions": "<path>",
             "outputs": [
                 {
-                    "format": "<format name>",
                     "file": "<path>"
+                    "format": "<format name>",
                 }
             ]
         }
@@ -138,7 +122,10 @@ with translation requests for all languages. For example, it can include
 definitions of project-specific terminology, or hints about the level of
 formality to use in translations.
 
-`source.file` (required) is the path of the source CSV file.
+`source.file` (required) is the path of the source strings file.
+
+`source.format` (optional) is the format of the source strings file, as described
+in the Formats section below. Default is `csv`.
 
 `source.outputs` (optional) is a list of files in alternate formats to generate
 from the source language. See "Outputs" below.
@@ -148,7 +135,11 @@ from the source language. See "Outputs" below.
 `targets[].language` (required) is the English name of the language, e.g.,
 `"Spanish"`.
 
-`targets[].file` (required) is the path of the target CSV file for the language.
+`targets[].file` (required) is the path of the target strings file for the
+language.
+
+`targets[].format` (optional) is the format of the target strings file, as
+described in the Formats section below. Default is `csv`.
 
 `targets[].instructions` (optional) is the path of a text file with instructions
 to include with translation requests for this language. For example, it can
@@ -160,28 +151,60 @@ for the target language. See "Outputs" below.
 `verbose` (optional) enables verbose logging of progress and configuration.
 Verbose mode may also be enabled via command-line option.
 
-### Outputs
+### Formats
 
-The CSV files are considered the source of truth. Autotranslate will always read
-and write them.
+Strings files can have different formats, but regardless of format, they can have
+the following information for each string:
+
+- Key: A unique identifier for the string.
+- Text: The text of the string in the file's language.
+- Description: Optionally present in the source-langauge strings file. Additional
+  information about the string to help produce better translations.
+- Hash: Always present in the target-language strings file. A hash (using the
+  32-bit xxHash algorithm and encoded in zero-padded lower-case hexadecimal)
+  of the text and description in the source language. This is used to detect
+  when the source-language text or description has been edited and autotranslate
+  needs to generate fresh translations.
+
+The main source and target files are considered the source of truth. Autotranslate
+will always read and write them.
 
 In addition, autotranslate can write strings for the source and target languages
 to additional output files.
 
-Each output specification has a `file` value with the path of the output file and
-a `format` value that controls what kind of file is generated.
+Each file specification, whether it's the main source/target file or an additional
+output, has a `file` value with the path of the output file and a `format` value
+that controls what kind of file is generated.
 
 List of supported formats, each of which is described in more detail below:
 
+- `csv`
 - `java-properties`
 - `javascript-const`
+
+#### csv
+
+CSV files have three columns. They always start with a header line. The files
+use standard CSV formatting, with double quotes omitted if they aren't required.
+
+For the source language CSV, the three columns are:
+
+1. Key
+2. Text
+3. Description
+
+For the target language CSVs, the three columns are:
+
+1. Key
+2. Text
+3. Hash
 
 #### java-properties
 
 Produces a Java properties file for use as a PropertyResourceBundle. The keys are
-the sting keys and the values are the text, with special characters properly
-quoted. If a string has a description, it is included as a comment on the line
-before the key/value pair, but only for the source language.
+the string keys and the values are the text, with special characters properly
+quoted. If a string has a description, it is included in the source language's
+file as a comment on the line before the key/value pair.
 
 Example:
 
