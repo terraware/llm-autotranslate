@@ -204,9 +204,10 @@ For the target language CSVs, the three columns are:
 Produces a Java properties file for use as a PropertyResourceBundle. The keys are
 the string keys and the values are the text, with special characters properly
 quoted. If a string has a description, it is included in the source language's
-file as a comment on the line before the key/value pair.
+file as a comment on the line before the key/value pair. For target-language
+files, the hash is included as a comment on the line before the key/value pair.
 
-Example:
+Example (source language):
 
 ```
 ABC=Some text\: it''s quoted
@@ -219,9 +220,10 @@ DEF=Some other text
 Produces a JavaScript source file that exports a constant `strings` that is an
 object where the keys are the string keys and the values are the text. If a
 string has a description, it is included as a comment on the line before the
-key/value pair, but only for the source language.
+key/value pair, but only for the source language. For target-language files,
+the hash is included as a comment on the line before the key/value pair.
 
-Example:
+Example (source language):
 
 ```javascript
 export const strings = {
