@@ -4,7 +4,8 @@ import { existsSync, readFileSync, unwatchFile, watchFile, writeFileSync } from 
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
-import { SourceRecord, TargetRecord, readSourceCsv, readTargetCsv, writeTargetCsv } from './csv.js';
+import { SourceRecord, TargetRecord } from './csv.js';
+import { readSourceFile, readTargetFile, writeTargetFile } from './file-io.js';
 import { StringRecord, outputRegistry } from './formats.js';
 import { needsTranslation } from './hash.js';
 import { ConsoleLogger, Logger } from './logger.js';
@@ -32,6 +33,7 @@ export interface OutputSpec {
 export interface TargetLanguageConfig {
   language: string;
   file: string;
+  format?: string;
   instructions?: string;
   outputs?: OutputSpec[];
 }
@@ -41,6 +43,7 @@ export interface AutotranslateConfig {
   instructions?: string;
   source: {
     file: string;
+    format?: string;
     outputs?: OutputSpec[];
   };
   targets: TargetLanguageConfig[];
@@ -133,9 +136,9 @@ export async function autotranslate(config: AutotranslateConfig): Promise<void> 
     logger.log(`Language-specific instruction files: ${languageInstructionCount}`);
   }
 
-  // Step 1: Read source-language CSV file (hashes calculated during read)
+  // Step 1: Read source-language strings file (hashes calculated during read)
   logger.log(`\nReading source file: ${finalConfig.source.file}`);
-  const sourceRecords = await readSourceCsv(finalConfig.source.file);
+  const sourceRecords = await readSourceFile(finalConfig.source.file, finalConfig.source.format);
   logger.log(`Found ${sourceRecords.length} source strings`);
 
   // Generate source output files
@@ -272,10 +275,11 @@ function generateOutputFiles(
 
 async function readAndFilterExistingRecords(
   targetFile: string,
+  targetFormat: string | undefined,
   sourceMap: Map<string, SourceRecord>,
   logger: Logger
 ): Promise<{ filteredExisting: TargetRecord[]; existingMap: Map<string, TargetRecord>; removedCount: number }> {
-  const existingRecords = await readTargetCsv(targetFile);
+  const existingRecords = await readTargetFile(targetFile, targetFormat);
   const existingMap = new Map<string, TargetRecord>();
   for (const record of existingRecords) {
     existingMap.set(record.key, record);
@@ -474,6 +478,7 @@ async function processTargetLanguage(
   // Step 1: Read and filter existing records
   const { filteredExisting, existingMap, removedCount } = await readAndFilterExistingRecords(
     target.file,
+    target.format,
     sourceMap,
     logger
   );
@@ -506,7 +511,7 @@ async function processTargetLanguage(
 
   // Step 5: Sort and write updated records
   updatedRecords.sort((a, b) => a.key.localeCompare(b.key));
-  await writeTargetCsv(target.file, updatedRecords);
+  await writeTargetFile(target.file, updatedRecords, target.format);
 
   // Generate target output files
   generateOutputFiles(target.outputs, updatedRecords, logger, `target (${target.language})`);
