@@ -1,5 +1,5 @@
-import { SourceRecord, TargetRecord } from './csv.js';
-import { bidirectionalRegistry } from './formats.js';
+import { bidirectionalRegistry } from './formats/registries.js';
+import { SourceRecord, TargetRecord } from './records';
 
 export async function readSourceFile(filePath: string, format?: string): Promise<SourceRecord[]> {
   const detectedFormat = bidirectionalRegistry.detectFormat(filePath, format);
