@@ -5,7 +5,7 @@ import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 import { readSourceFile, readTargetFile, writeTargetFile } from './file-io.js';
-import { StringRecord } from './formats';
+import { StringRecord } from './formats/index.js';
 import { outputRegistry } from './formats/registries.js';
 import { ConsoleLogger, Logger } from './logger.js';
 import { SourceRecord, TargetRecord } from './records.js';
@@ -525,6 +525,3 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     process.exit(1);
   });
 }
-
-export { SourceRecord } from './records';
-export { TargetRecord } from './records';
