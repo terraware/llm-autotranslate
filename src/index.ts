@@ -1,6 +1,7 @@
 #!/usr/bin/env node
+import chokidar from 'chokidar';
 import { Command } from 'commander';
-import { existsSync, readFileSync, unwatchFile, watchFile, writeFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -192,35 +193,47 @@ async function runWatchMode(config: ConfigFile) {
   // Run initial translation
   await autotranslate(config);
 
-  // Set up file watcher
+  // Set up file watcher with chokidar
   let isProcessing = false;
 
-  watchFile(config.source.file, { interval: 1000 }, async (curr, prev) => {
+  const watcher = chokidar.watch(config.source.file, {
+    ignoreInitial: true, // Don't trigger on initial scan
+    persistent: true,
+    usePolling: false, // Use native file system events when possible
+    awaitWriteFinish: {
+      stabilityThreshold: 300, // Wait for file to be stable for 300ms
+      pollInterval: 100, // Check every 100ms
+    },
+  });
+
+  watcher.on('change', async (path) => {
     if (isProcessing) {
       return; // Avoid overlapping runs
     }
 
-    if (curr.mtime > prev.mtime) {
-      isProcessing = true;
-      logger.log(`\n[${new Date().toLocaleTimeString()}] Source file changed, updating translations...`);
+    isProcessing = true;
+    logger.log(`\n[${new Date().toLocaleTimeString()}] Source file changed, updating translations...`);
 
-      try {
-        await autotranslate(config);
-        logger.log(`[${new Date().toLocaleTimeString()}] Translations updated successfully.\n`);
-      } catch (error) {
-        logger.error(
-          `[${new Date().toLocaleTimeString()}] Translation update failed: ${error instanceof Error ? error.message : String(error)}\n`
-        );
-      } finally {
-        isProcessing = false;
-      }
+    try {
+      await autotranslate(config);
+      logger.log(`[${new Date().toLocaleTimeString()}] Translations updated successfully.\n`);
+    } catch (error) {
+      logger.error(
+        `[${new Date().toLocaleTimeString()}] Translation update failed: ${error instanceof Error ? error.message : String(error)}\n`
+      );
+    } finally {
+      isProcessing = false;
     }
   });
 
+  watcher.on('error', (error) => {
+    logger.error(`Watcher error: ${error instanceof Error ? error.message : String(error)}`);
+  });
+
   // Handle graceful shutdown
-  process.on('SIGINT', () => {
+  process.on('SIGINT', async () => {
     logger.log('\nStopping watch mode...');
-    unwatchFile(config.source.file);
+    await watcher.close();
     process.exit(0);
   });
 
