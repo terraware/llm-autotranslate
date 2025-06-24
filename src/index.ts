@@ -146,19 +146,19 @@ export async function autotranslate(config: AutotranslateConfig): Promise<void> 
     sourceMap.set(record.key, record);
   }
 
-  // Step 3: Process all target languages (without writing files yet)
-  const processingResults: ProcessingResult[] = [];
-  for (const target of finalConfig.targets) {
-    const result = await processTargetLanguage(
+  // Step 3: Process all target languages concurrently (without writing files yet)
+  const processingPromises = finalConfig.targets.map((target) =>
+    processTargetLanguage(
       target,
       sourceMap,
       logger,
       finalConfig.instructions,
       target.instructions,
       finalConfig.batchSize
-    );
-    processingResults.push(result);
-  }
+    )
+  );
+
+  const processingResults = await Promise.all(processingPromises);
 
   // Step 4: Write all files at once
   await executeSourceOutputFiles(finalConfig.source.outputs, sourceRecords, logger);
