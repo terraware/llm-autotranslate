@@ -7,12 +7,12 @@ import { fileURLToPath } from 'url';
 import { readSourceFile, readTargetFile, writeTargetFile } from './file-io.js';
 import { StringRecord } from './formats/index.js';
 import { outputRegistry } from './formats/registries.js';
-import { ConsoleLogger, Logger } from './logger.js';
+import { ConsoleLogger, Logger, PrefixedLogger } from './logger.js';
 import { SourceRecord, TargetRecord } from './records.js';
 import { BatchTranslationRequest, Translator } from './translator.js';
 
 // Re-export useful types for library users
-export { Logger, ConsoleLogger, SilentLogger } from './logger.js';
+export { Logger, ConsoleLogger, SilentLogger, PrefixedLogger } from './logger.js';
 export { Translator } from './translator.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -439,22 +439,24 @@ async function processTargetLanguage(
   languageInstructionsFile?: string,
   batchSize: number = 15
 ): Promise<ProcessingResult> {
-  logger.log(`\nProcessing ${target.language} (${target.file})`);
+  const prefixedLogger = new PrefixedLogger(logger, target.language);
+
+  prefixedLogger.log(`Processing ${target.language} (${target.file})`);
 
   // Step 1: Read and filter existing records
   const { filteredExisting, existingMap, removedCount } = await readAndFilterExistingRecords(
     target.file,
     target.format,
     sourceMap,
-    logger
+    prefixedLogger
   );
 
   // Step 2: Identify strings that need translation
-  const candidates = identifyTranslationCandidates(sourceMap, existingMap, logger, target.language);
+  const candidates = identifyTranslationCandidates(sourceMap, existingMap, prefixedLogger, target.language);
 
   // Check if any changes are needed (no translations needed and no records removed)
   if (candidates.length === 0 && removedCount === 0) {
-    logger.log(`No changes needed for ${target.file}`);
+    prefixedLogger.log(`No changes needed for ${target.file}`);
     const existingRecords = preserveExistingTranslations(filteredExisting, sourceMap);
     return {
       target,
@@ -469,14 +471,14 @@ async function processTargetLanguage(
   // Step 4: Translate new/changed strings
   if (candidates.length > 0) {
     const translator = new Translator(target.language, globalInstructionsFile, languageInstructionsFile);
-    const newTranslations = await executeTranslations(candidates, translator, batchSize, logger);
+    const newTranslations = await executeTranslations(candidates, translator, batchSize, prefixedLogger);
     updatedRecords.push(...newTranslations);
   }
 
   // Step 5: Sort records (writing will happen later)
   updatedRecords.sort((a, b) => a.key.localeCompare(b.key));
 
-  logger.log(`Prepared ${updatedRecords.length} strings for ${target.file}`);
+  prefixedLogger.log(`Prepared ${updatedRecords.length} strings for ${target.file}`);
 
   return {
     target,
@@ -495,8 +497,9 @@ async function executeAllFileWrites(
   // Write target files
   for (const result of processingResults) {
     if (result.hasChanges) {
+      const prefixedLogger = new PrefixedLogger(logger, result.target.language);
       await writeTargetFile(result.target.file, result.updatedRecords, result.target.format);
-      logger.log(`Updated ${result.target.file} with ${result.updatedRecords.length} strings`);
+      prefixedLogger.log(`Updated ${result.target.file} with ${result.updatedRecords.length} strings`);
     }
   }
 
@@ -517,11 +520,13 @@ async function executeTargetOutputFiles(
   logger: Logger,
   language: string
 ): Promise<void> {
+  const prefixedLogger = new PrefixedLogger(logger, language);
+
   for (const output of outputs) {
     try {
       const formatter = outputRegistry.get(output.format);
       if (!formatter) {
-        logger.error(`Unknown output format: ${output.format}`);
+        prefixedLogger.error(`Unknown output format: ${output.format}`);
         continue;
       }
 
@@ -534,9 +539,9 @@ async function executeTargetOutputFiles(
 
       const content = formatter.format(stringRecords);
       writeFileSync(output.file, content, 'utf-8');
-      logger.log(`Generated ${output.format} output for ${language}: ${output.file}`);
+      prefixedLogger.log(`Generated ${output.format} output: ${output.file}`);
     } catch (error) {
-      logger.error(
+      prefixedLogger.error(
         `Failed to generate ${output.format} output ${output.file}: ${error instanceof Error ? error.message : String(error)}`
       );
     }
@@ -552,11 +557,13 @@ async function executeSourceOutputFiles(
     return;
   }
 
+  const prefixedLogger = new PrefixedLogger(logger, 'Source');
+
   for (const output of sourceOutputs) {
     try {
       const formatter = outputRegistry.get(output.format);
       if (!formatter) {
-        logger.error(`Unknown output format: ${output.format}`);
+        prefixedLogger.error(`Unknown output format: ${output.format}`);
         continue;
       }
 
@@ -569,10 +576,10 @@ async function executeSourceOutputFiles(
 
       const content = formatter.format(stringRecords);
       writeFileSync(output.file, content, 'utf-8');
-      logger.log(`Generated ${output.format} source output: ${output.file}`);
+      prefixedLogger.log(`Generated ${output.format} output: ${output.file}`);
     } catch (error) {
-      logger.error(
-        `Failed to generate ${output.format} source output ${output.file}: ${error instanceof Error ? error.message : String(error)}`
+      prefixedLogger.error(
+        `Failed to generate ${output.format} output ${output.file}: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }
