@@ -26,3 +26,18 @@ export class SilentLogger implements Logger {
     console.error(message);
   }
 }
+
+export class PrefixedLogger implements Logger {
+  constructor(
+    private baseLogger: Logger,
+    private prefix: string
+  ) {}
+
+  log(message: string): void {
+    this.baseLogger.log(`[${this.prefix}] ${message}`);
+  }
+
+  error(message: string): void {
+    this.baseLogger.error(`[${this.prefix}] ${message}`);
+  }
+}
