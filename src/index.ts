@@ -140,18 +140,16 @@ export async function autotranslate(config: AutotranslateConfig): Promise<void> 
   const sourceRecords = await readSourceFile(finalConfig.source.file, finalConfig.source.format);
   logger.log(`Found ${sourceRecords.length} source strings`);
 
-  // Generate source output files
-  generateOutputFiles(finalConfig.source.outputs, sourceRecords, logger, 'source');
-
   // Step 2: Create source map for easy lookup
   const sourceMap = new Map<string, SourceRecord>();
   for (const record of sourceRecords) {
     sourceMap.set(record.key, record);
   }
 
-  // Step 3: Process each target language
+  // Step 3: Process all target languages (without writing files yet)
+  const processingResults: ProcessingResult[] = [];
   for (const target of finalConfig.targets) {
-    await processTargetLanguage(
+    const result = await processTargetLanguage(
       target,
       sourceMap,
       logger,
@@ -159,7 +157,12 @@ export async function autotranslate(config: AutotranslateConfig): Promise<void> 
       target.instructions,
       finalConfig.batchSize
     );
+    processingResults.push(result);
   }
+
+  // Step 4: Write all files at once
+  await executeSourceOutputFiles(finalConfig.source.outputs, sourceRecords, logger);
+  await executeAllFileWrites(sourceRecords, processingResults, logger);
 
   logger.log('\nAutotranslate completed successfully!');
 }
@@ -230,46 +233,10 @@ interface TranslationCandidate {
   sourceRecord: SourceRecord;
 }
 
-function generateOutputFiles(
-  outputs: OutputSpec[] | undefined,
-  records: SourceRecord[] | TargetRecord[],
-  logger: Logger,
-  context: string,
-  forceGenerate: boolean = true
-): void {
-  if (!outputs || outputs.length === 0) {
-    return;
-  }
-
-  for (const output of outputs) {
-    try {
-      // Skip if file exists and we're not forcing generation
-      if (!forceGenerate && existsSync(output.file)) {
-        continue;
-      }
-
-      const formatter = outputRegistry.get(output.format);
-      if (!formatter) {
-        logger.error(`Unknown output format: ${output.format}`);
-        continue;
-      }
-
-      // Convert records to StringRecord format
-      const stringRecords: StringRecord[] = records.map((record) => ({
-        key: record.key,
-        text: record.text,
-        description: (record as SourceRecord).description,
-      }));
-
-      const content = formatter.format(stringRecords);
-      writeFileSync(output.file, content, 'utf-8');
-      logger.log(`Generated ${output.format} output: ${output.file}`);
-    } catch (error) {
-      logger.error(
-        `Failed to generate ${output.format} output ${output.file}: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
-  }
+interface ProcessingResult {
+  target: TargetLanguageConfig;
+  updatedRecords: TargetRecord[];
+  hasChanges: boolean;
 }
 
 async function readAndFilterExistingRecords(
@@ -471,7 +438,7 @@ async function processTargetLanguage(
   globalInstructionsFile?: string,
   languageInstructionsFile?: string,
   batchSize: number = 15
-) {
+): Promise<ProcessingResult> {
   logger.log(`\nProcessing ${target.language} (${target.file})`);
 
   // Step 1: Read and filter existing records
@@ -488,14 +455,12 @@ async function processTargetLanguage(
   // Check if any changes are needed (no translations needed and no records removed)
   if (candidates.length === 0 && removedCount === 0) {
     logger.log(`No changes needed for ${target.file}`);
-
-    // Generate output files only if they don't exist
-    if (target.outputs && target.outputs.length > 0) {
-      const existingRecords = preserveExistingTranslations(filteredExisting, sourceMap);
-      generateOutputFiles(target.outputs, existingRecords, logger, `target (${target.language})`, false);
-    }
-
-    return;
+    const existingRecords = preserveExistingTranslations(filteredExisting, sourceMap);
+    return {
+      target,
+      updatedRecords: existingRecords,
+      hasChanges: false,
+    };
   }
 
   // Step 3: Preserve existing translations that are still valid
@@ -508,14 +473,109 @@ async function processTargetLanguage(
     updatedRecords.push(...newTranslations);
   }
 
-  // Step 5: Sort and write updated records
+  // Step 5: Sort records (writing will happen later)
   updatedRecords.sort((a, b) => a.key.localeCompare(b.key));
-  await writeTargetFile(target.file, updatedRecords, target.format);
 
-  // Generate target output files
-  generateOutputFiles(target.outputs, updatedRecords, logger, `target (${target.language})`);
+  logger.log(`Prepared ${updatedRecords.length} strings for ${target.file}`);
 
-  logger.log(`Updated ${target.file} with ${updatedRecords.length} strings`);
+  return {
+    target,
+    updatedRecords,
+    hasChanges: true,
+  };
+}
+
+async function executeAllFileWrites(
+  sourceRecords: SourceRecord[],
+  processingResults: ProcessingResult[],
+  logger: Logger
+): Promise<void> {
+  logger.log('\nWriting all files...');
+
+  // Write target files
+  for (const result of processingResults) {
+    if (result.hasChanges) {
+      await writeTargetFile(result.target.file, result.updatedRecords, result.target.format);
+      logger.log(`Updated ${result.target.file} with ${result.updatedRecords.length} strings`);
+    }
+  }
+
+  // Write target output files
+  for (const result of processingResults) {
+    if (result.target.outputs && result.target.outputs.length > 0) {
+      // Only generate output files if there are changes OR if the file doesn't exist
+      if (result.hasChanges) {
+        await executeTargetOutputFiles(result.target.outputs, result.updatedRecords, logger, result.target.language);
+      }
+    }
+  }
+}
+
+async function executeTargetOutputFiles(
+  outputs: OutputSpec[],
+  records: TargetRecord[],
+  logger: Logger,
+  language: string
+): Promise<void> {
+  for (const output of outputs) {
+    try {
+      const formatter = outputRegistry.get(output.format);
+      if (!formatter) {
+        logger.error(`Unknown output format: ${output.format}`);
+        continue;
+      }
+
+      // Convert records to StringRecord format
+      const stringRecords: StringRecord[] = records.map((record) => ({
+        key: record.key,
+        text: record.text,
+        description: undefined, // Target records don't have descriptions
+      }));
+
+      const content = formatter.format(stringRecords);
+      writeFileSync(output.file, content, 'utf-8');
+      logger.log(`Generated ${output.format} output for ${language}: ${output.file}`);
+    } catch (error) {
+      logger.error(
+        `Failed to generate ${output.format} output ${output.file}: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+}
+
+async function executeSourceOutputFiles(
+  sourceOutputs: OutputSpec[] | undefined,
+  sourceRecords: SourceRecord[],
+  logger: Logger
+): Promise<void> {
+  if (!sourceOutputs || sourceOutputs.length === 0) {
+    return;
+  }
+
+  for (const output of sourceOutputs) {
+    try {
+      const formatter = outputRegistry.get(output.format);
+      if (!formatter) {
+        logger.error(`Unknown output format: ${output.format}`);
+        continue;
+      }
+
+      // Convert records to StringRecord format
+      const stringRecords: StringRecord[] = sourceRecords.map((record) => ({
+        key: record.key,
+        text: record.text,
+        description: record.description,
+      }));
+
+      const content = formatter.format(stringRecords);
+      writeFileSync(output.file, content, 'utf-8');
+      logger.log(`Generated ${output.format} source output: ${output.file}`);
+    } catch (error) {
+      logger.error(
+        `Failed to generate ${output.format} source output ${output.file}: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
 }
 
 // Only run main if this file is executed directly (not imported as a library)
