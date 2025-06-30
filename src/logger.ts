@@ -18,7 +18,7 @@ export class ConsoleLogger implements Logger {
 }
 
 export class SilentLogger implements Logger {
-  log(message: string): void {
+  log(): void {
     // Do nothing
   }
 

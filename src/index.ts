@@ -46,10 +46,8 @@ export interface AutotranslateConfig {
   verbose?: boolean;
 }
 
-interface ConfigFile extends AutotranslateConfig {}
-
 interface ParsedOptions {
-  config: ConfigFile;
+  config: AutotranslateConfig;
   watch: boolean;
 }
 
@@ -70,7 +68,7 @@ function parseCommandLine(): ParsedOptions {
   // Read and parse config file
   try {
     const configContent = readFileSync(options.config, 'utf-8');
-    const config = JSON.parse(configContent) as ConfigFile;
+    const config = JSON.parse(configContent) as AutotranslateConfig;
 
     // Set verbose mode - command line option overrides config file
     config.verbose = options.verbose || config.verbose;
@@ -181,7 +179,7 @@ async function main() {
   }
 }
 
-async function runWatchMode(config: ConfigFile) {
+async function runWatchMode(config: AutotranslateConfig) {
   const logger = new ConsoleLogger(config.verbose ?? false);
 
   logger.log('Starting watch mode...');

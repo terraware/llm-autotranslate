@@ -75,7 +75,7 @@ export class Translator {
         const globalInstructions = readFileSync(globalInstructionsFile, 'utf-8');
         parts.push(globalInstructions);
       } catch (error) {
-        throw new Error(`Failed to read global instructions file: ${globalInstructionsFile}`);
+        throw new Error(`Failed to read global instructions file: ${globalInstructionsFile}`, { cause: error });
       }
     }
 
@@ -85,7 +85,7 @@ export class Translator {
         const languageInstructions = readFileSync(languageInstructionsFile, 'utf-8');
         parts.push(languageInstructions);
       } catch (error) {
-        throw new Error(`Failed to read language instructions file: ${languageInstructionsFile}`);
+        throw new Error(`Failed to read language instructions file: ${languageInstructionsFile}`, { cause: error });
       }
     }
 
