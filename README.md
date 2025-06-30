@@ -64,8 +64,8 @@ The value of the "instructions" field in the API request is constructed from the
 following pieces:
 
 - A preamble that's built into autotranslate. The preamble is in the file
-  `src/preamble.txt`. The string `{LANGUAGE}` in the preamble is replaced with
-  the name of the target language.
+  `src/preamble.txt`. The strings `{SOURCE_LANGUAGE}` and `{TARGET_LANGUAGE}` in
+  the preamble are replaced with the names of the source and target languages.
 - An optional file with project-specific, but not language-specific, instructions.
 - An optional file with language-specific instructions.
 
@@ -85,6 +85,7 @@ are optional as noted below.
     "source": {
         "file": "<path>",
         "format": "<format name>",
+        "language": "<language name>",
         "outputs": [
             {
                 "file": "<path>"
@@ -94,10 +95,10 @@ are optional as noted below.
     },
     "targets": [
         {
-            "language": "<language name>",
             "file": "<path>"
             "format": "<format name>",
             "instructions": "<path>",
+            "language": "<language name>",
             "outputs": [
                 {
                     "file": "<path>"
@@ -126,6 +127,9 @@ formality to use in translations.
 
 `source.format` (optional) is the format of the source strings file, as described
 in the Formats section below. Default is `csv`.
+
+`source.language` (optional) is the name of the source language. Default is
+`English`.
 
 `source.outputs` (optional) is a list of files in alternate formats to generate
 from the source language. See "Outputs" below.

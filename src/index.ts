@@ -1,9 +1,7 @@
 #!/usr/bin/env node
 import chokidar from 'chokidar';
 import { Command } from 'commander';
-import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { readFileSync, writeFileSync } from 'fs';
 
 import { readSourceFile, readTargetFile, writeTargetFile } from './file-io.js';
 import { StringRecord } from './formats/index.js';
@@ -15,9 +13,6 @@ import { BatchTranslationRequest, Translator } from './translator.js';
 // Re-export useful types for library users
 export { Logger, ConsoleLogger, SilentLogger, PrefixedLogger } from './logger.js';
 export { Translator } from './translator.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 interface CliOptions {
   config: string;
@@ -44,6 +39,7 @@ export interface AutotranslateConfig {
   source: {
     file: string;
     format?: string;
+    language?: string;
     outputs?: OutputSpec[];
   };
   targets: TargetLanguageConfig[];
@@ -99,6 +95,7 @@ export async function autotranslate(config: AutotranslateConfig): Promise<void> 
     targets: config.targets,
     verbose: config.verbose ?? false,
   };
+  const sourceLanguage = finalConfig.source.language ?? 'English';
 
   // Create logger
   const logger = new ConsoleLogger(finalConfig.verbose);
@@ -150,6 +147,7 @@ export async function autotranslate(config: AutotranslateConfig): Promise<void> 
   // Step 3: Process all target languages concurrently (without writing files yet)
   const processingPromises = finalConfig.targets.map((target) =>
     processTargetLanguage(
+      sourceLanguage,
       target,
       sourceMap,
       logger,
@@ -163,7 +161,7 @@ export async function autotranslate(config: AutotranslateConfig): Promise<void> 
 
   // Step 4: Write all files at once
   await executeSourceOutputFiles(finalConfig.source.outputs, sourceRecords, logger);
-  await executeAllFileWrites(sourceRecords, processingResults, logger);
+  await executeAllFileWrites(processingResults, logger);
 
   logger.log('\nAutotranslate completed successfully!');
 }
@@ -206,7 +204,7 @@ async function runWatchMode(config: ConfigFile) {
     },
   });
 
-  watcher.on('change', async (path) => {
+  watcher.on('change', async () => {
     if (isProcessing) {
       return; // Avoid overlapping runs
     }
@@ -445,6 +443,7 @@ async function executeTranslations(
 }
 
 async function processTargetLanguage(
+  sourceLanguage: string,
   target: TargetLanguageConfig,
   sourceMap: Map<string, SourceRecord>,
   logger: Logger,
@@ -483,7 +482,12 @@ async function processTargetLanguage(
 
   // Step 4: Translate new/changed strings
   if (candidates.length > 0) {
-    const translator = new Translator(target.language, globalInstructionsFile, languageInstructionsFile);
+    const translator = new Translator(
+      sourceLanguage,
+      target.language,
+      globalInstructionsFile,
+      languageInstructionsFile
+    );
     const newTranslations = await executeTranslations(candidates, translator, batchSize, prefixedLogger);
     updatedRecords.push(...newTranslations);
   }
@@ -500,11 +504,7 @@ async function processTargetLanguage(
   };
 }
 
-async function executeAllFileWrites(
-  sourceRecords: SourceRecord[],
-  processingResults: ProcessingResult[],
-  logger: Logger
-): Promise<void> {
+async function executeAllFileWrites(processingResults: ProcessingResult[], logger: Logger): Promise<void> {
   logger.log('\nWriting all files...');
 
   // Write target files
