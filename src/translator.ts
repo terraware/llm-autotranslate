@@ -23,12 +23,6 @@ const BatchTranslationResponse = z.object({
     .describe('Array of translations for the provided strings'),
 });
 
-export interface TranslationRequest {
-  text: string;
-  description: string;
-  targetLanguage: string;
-}
-
 export interface BatchTranslationRequest {
   key: string;
   text: string;
@@ -37,9 +31,14 @@ export interface BatchTranslationRequest {
 
 export class Translator {
   private openai: OpenAI;
-  private instructions: string;
+  private readonly instructions: string;
 
-  constructor(targetLanguage: string, globalInstructionsFile?: string, languageInstructionsFile?: string) {
+  constructor(
+    sourceLanguage: string,
+    targetLanguage: string,
+    globalInstructionsFile?: string,
+    languageInstructionsFile?: string
+  ) {
     // Initialize OpenAI client
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
@@ -49,10 +48,16 @@ export class Translator {
     this.openai = new OpenAI({ apiKey });
 
     // Build instructions
-    this.instructions = this.buildInstructions(targetLanguage, globalInstructionsFile, languageInstructionsFile);
+    this.instructions = this.buildInstructions(
+      sourceLanguage,
+      targetLanguage,
+      globalInstructionsFile,
+      languageInstructionsFile
+    );
   }
 
   private buildInstructions(
+    sourceLanguage: string,
     targetLanguage: string,
     globalInstructionsFile?: string,
     languageInstructionsFile?: string
@@ -62,7 +67,7 @@ export class Translator {
     // Add preamble
     const preamblePath = join(__dirname, 'preamble.txt');
     const preamble = readFileSync(preamblePath, 'utf-8');
-    parts.push(preamble.replace('{LANGUAGE}', targetLanguage));
+    parts.push(preamble.replace('{SOURCE_LANGUAGE}', sourceLanguage).replace('{TARGET_LANGUAGE}', targetLanguage));
 
     // Add global instructions if provided
     if (globalInstructionsFile) {
@@ -94,37 +99,30 @@ export class Translator {
       prompt += `\n\nDescription: ${description}`;
     }
 
-    try {
-      const response = await this.openai.responses.parse({
-        model: 'gpt-4.1',
-        input: [
-          {
-            role: 'system',
-            content: this.instructions,
-          },
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
-        text: {
-          format: zodTextFormat(TranslationResponse, 'translation'),
+    const response = await this.openai.responses.parse({
+      model: 'gpt-4.1',
+      input: [
+        {
+          role: 'system',
+          content: this.instructions,
         },
-        temperature: 0,
-      });
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+      text: {
+        format: zodTextFormat(TranslationResponse, 'translation'),
+      },
+      temperature: 0,
+    });
 
-      const parsed = response.output_parsed;
-      if (!parsed || !parsed.translation) {
-        throw new Error('Invalid response format from OpenAI API');
-      }
-
-      return parsed.translation;
-    } catch (error) {
-      if (error instanceof Error) {
-        throw new Error(`Translation failed: ${error.message}`);
-      }
-      throw new Error('Translation failed with unknown error');
+    const parsed = response.output_parsed;
+    if (!parsed || !parsed.translation) {
+      throw new Error('Invalid response format from OpenAI API');
     }
+
+    return parsed.translation;
   }
 
   async translateBatch(requests: BatchTranslationRequest[]): Promise<Map<string, string>> {
@@ -145,48 +143,41 @@ export class Translator {
 
     const prompt = promptParts.join('\n');
 
-    try {
-      const response = await this.openai.responses.parse({
-        model: 'gpt-4.1',
-        input: [
-          {
-            role: 'system',
-            content: this.instructions,
-          },
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
-        text: {
-          format: zodTextFormat(BatchTranslationResponse, 'batch_translation'),
+    const response = await this.openai.responses.parse({
+      model: 'gpt-4.1',
+      input: [
+        {
+          role: 'system',
+          content: this.instructions,
         },
-        temperature: 0,
-      });
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+      text: {
+        format: zodTextFormat(BatchTranslationResponse, 'batch_translation'),
+      },
+      temperature: 0,
+    });
 
-      const parsed = response.output_parsed;
-      if (!parsed || !parsed.translations) {
-        throw new Error('Invalid response format from OpenAI API');
-      }
-
-      // Convert to Map for easy lookup
-      const resultMap = new Map<string, string>();
-      for (const translation of parsed.translations) {
-        resultMap.set(translation.key, translation.translation);
-      }
-
-      // Validate that we got translations for all requested keys
-      const missingKeys = requests.filter((req) => !resultMap.has(req.key)).map((req) => req.key);
-      if (missingKeys.length > 0) {
-        throw new Error(`Missing translations for keys: ${missingKeys.join(', ')}`);
-      }
-
-      return resultMap;
-    } catch (error) {
-      if (error instanceof Error) {
-        throw new Error(`Batch translation failed: ${error.message}`);
-      }
-      throw new Error('Batch translation failed with unknown error');
+    const parsed = response.output_parsed;
+    if (!parsed || !parsed.translations) {
+      throw new Error('Invalid response format from OpenAI API');
     }
+
+    // Convert to Map for easy lookup
+    const resultMap = new Map<string, string>();
+    for (const translation of parsed.translations) {
+      resultMap.set(translation.key, translation.translation);
+    }
+
+    // Validate that we got translations for all requested keys
+    const missingKeys = requests.filter((req) => !resultMap.has(req.key)).map((req) => req.key);
+    if (missingKeys.length > 0) {
+      throw new Error(`Missing translations for keys: ${missingKeys.join(', ')}`);
+    }
+
+    return resultMap;
   }
 }

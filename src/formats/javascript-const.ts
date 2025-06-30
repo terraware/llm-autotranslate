@@ -101,9 +101,7 @@ export class JavaScriptConstFormatter implements BidirectionalFormatter {
           records.push(record);
         }
       } catch (error) {
-        throw new Error(
-          `Error parsing line ${lineNumber}: ${error instanceof Error ? error.message : String(error)}\nLine: ${line}`
-        );
+        throw new Error(`Error parsing line ${lineNumber} ${line}`, { cause: error });
       }
 
       // Reset comment after processing a key-value pair
@@ -157,9 +155,7 @@ export class JavaScriptConstFormatter implements BidirectionalFormatter {
           return rawText;
       }
     } catch (error) {
-      throw new Error(
-        `Invalid string value on line ${lineNumber}: ${error instanceof Error ? error.message : String(error)}`
-      );
+      throw new Error(`Invalid string value on line ${lineNumber}`, { cause: error });
     }
   }
 

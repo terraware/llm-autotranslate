@@ -19,10 +19,6 @@ export class OutputFormatterRegistry {
   get(formatName: string): OutputFormatter | undefined {
     return this.formatters.get(formatName);
   }
-
-  getSupportedFormats(): string[] {
-    return Array.from(this.formatters.keys());
-  }
 }
 
 export class BidirectionalFormatterRegistry {

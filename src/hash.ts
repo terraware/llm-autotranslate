@@ -10,8 +10,3 @@ export function calculateHash(text: string, description: string = ''): string {
   // Return as zero-padded hexadecimal string (8 characters for 32-bit hash)
   return hash.toString(16).padStart(8, '0');
 }
-
-export function needsTranslation(sourceText: string, sourceDescription: string, targetHash: string): boolean {
-  const currentHash = calculateHash(sourceText, sourceDescription);
-  return currentHash !== targetHash;
-}
