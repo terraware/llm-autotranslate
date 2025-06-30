@@ -1,0 +1,56 @@
+name: main
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.workflow }}
+  # Cancel in-progress builds on PRs.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Get yarn cache directory path
+        id: yarn-cache-dir-path
+        run: echo "dir=$(yarn cache dir)" >> $GITHUB_OUTPUT
+
+      - uses: actions/cache@v4
+        id: yarn-cache
+        with:
+          path: |
+            ${{ steps.yarn-cache-dir-path.outputs.dir }}
+            node_modules
+          key: ${{ runner.os }}-yarn-1-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+
+      - name: Install dependencies
+        run: yarn
+
+      # This is currently failing because the server hasn't been started yet.
+      # Additionally, it's not enough to just output the generated types file.
+      # We need to create a script that checks that our types file is up to date.
+      #- name: generate schemas
+      #  run: yarn generate-types
+
+      - name: Check that code is formatted
+        run: yarn prettier --check .
+
+      - name: Do typescript check
+        run: yarn tsc
+
+      - name: Run linter
+        run: yarn lint
