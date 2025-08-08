@@ -227,7 +227,7 @@ describe('Translator', () => {
       expect(result.get('goodbye')).toBe('Adiós');
 
       const callArgs = mockOpenAI.responses.parse.mock.calls[0][0];
-      const userMessage = callArgs.input[1] as { role: string; content: string };
+      const userMessage = callArgs.input![1] as { role: string; content: string };
       expect(userMessage.content).not.toContain('Description:');
     });
 
