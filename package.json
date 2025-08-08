@@ -22,7 +22,7 @@
     "commander": "^11.1.0",
     "csv-parser": "^3.0.0",
     "csv-writer": "^1.6.0",
-    "openai": "^4.28.4",
+    "openai": "^5.12.1",
     "xxhashjs": "^0.2.2",
     "zod": "^3.22.4"
   },
