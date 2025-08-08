@@ -8,7 +8,7 @@
     "autotranslate": "dist/index.js"
   },
   "scripts": {
-    "build": "tsc && cp src/preamble.txt dist/",
+    "build": "tsc && cp src/preamble.txt src/dirname.cjs dist/",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
     "format": "prettier --write .",

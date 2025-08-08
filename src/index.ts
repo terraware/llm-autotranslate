@@ -599,12 +599,8 @@ async function executeSourceOutputFiles(
 // Only run main if this file is executed directly (not imported as a library)
 // Skip if running in Jest test environment
 if (typeof process.env.JEST_WORKER_ID === 'undefined') {
-  // Use eval to prevent Jest from parsing import.meta at compile time
-  const importMeta = eval('import.meta');
-  if (importMeta.url === `file://${process.argv[1]}`) {
-    main().catch((error) => {
-      console.error('Error:', error instanceof Error ? error.message : String(error));
-      process.exit(1);
-    });
-  }
+  main().catch((error) => {
+    console.error('Error:', error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  });
 }

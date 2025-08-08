@@ -1,26 +1,15 @@
 import { readFileSync } from 'fs';
 import OpenAI from 'openai';
 import { zodTextFormat } from 'openai/helpers/zod';
-import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
+import { join } from 'path';
 import { z } from 'zod';
+
+import __dirname from './dirname.cjs';
 
 export interface OpenAIClient {
   responses: {
     parse: OpenAI['responses']['parse'];
   };
-}
-
-// Handle Jest environment where import.meta is not available
-let currentDir: string;
-if (typeof process.env.JEST_WORKER_ID !== 'undefined') {
-  // In Jest, use a mock path
-  currentDir = process.cwd() + '/src';
-} else {
-  // Use eval to prevent Jest from parsing import.meta at compile time
-  const importMeta = eval('import.meta');
-  const __filename = fileURLToPath(importMeta.url);
-  currentDir = dirname(__filename);
 }
 
 const TranslationResponse = z.object({
@@ -84,7 +73,7 @@ export class Translator {
     const parts: string[] = [];
 
     // Add preamble
-    const preamblePath = join(currentDir, 'preamble.txt');
+    const preamblePath = join(__dirname, 'preamble.txt');
     const preamble = readFileSync(preamblePath, 'utf-8');
     parts.push(preamble.replace('{SOURCE_LANGUAGE}', sourceLanguage).replace('{TARGET_LANGUAGE}', targetLanguage));
 
