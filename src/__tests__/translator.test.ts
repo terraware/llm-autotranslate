@@ -88,7 +88,7 @@ describe('Translator', () => {
 
       expect(result).toBe(expectedTranslation);
       expect(mockOpenAI.responses.parse).toHaveBeenCalledWith({
-        model: 'gpt-4.1',
+        model: 'gpt-5',
         input: [
           {
             role: 'system',
@@ -117,7 +117,7 @@ describe('Translator', () => {
 
       expect(result).toBe(expectedTranslation);
       expect(mockOpenAI.responses.parse).toHaveBeenCalledWith({
-        model: 'gpt-4.1',
+        model: 'gpt-5',
         input: [
           {
             role: 'system',
@@ -187,7 +187,7 @@ describe('Translator', () => {
       expect(result.size).toBe(2);
 
       expect(mockOpenAI.responses.parse).toHaveBeenCalledWith({
-        model: 'gpt-4.1',
+        model: 'gpt-5',
         input: [
           {
             role: 'system',
