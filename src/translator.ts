@@ -108,7 +108,7 @@ export class Translator {
     }
 
     const response = await this.openai.responses.parse({
-      model: 'gpt-4.1',
+      model: 'gpt-5',
       input: [
         {
           role: 'system',
