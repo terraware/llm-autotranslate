@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import chokidar from 'chokidar';
 import { Command } from 'commander';
+import { config } from 'dotenv';
 import { readFileSync, writeFileSync } from 'fs';
 
 import { readSourceFile, readTargetFile, writeTargetFile } from './file-io.js';
@@ -599,6 +600,7 @@ async function executeSourceOutputFiles(
 // Only run main if this file is executed directly (not imported as a library)
 // Skip if running in Jest test environment
 if (typeof process.env.JEST_WORKER_ID === 'undefined') {
+  config({ quiet: true });
   main().catch((error) => {
     console.error('Error:', error instanceof Error ? error.message : String(error));
     process.exit(1);
