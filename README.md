@@ -64,9 +64,7 @@ https://platform.openai.com/docs/api-reference/responses
 The value of the "instructions" field in the API request is constructed from the
 following pieces:
 
-- A preamble that's built into autotranslate. The preamble is in the file
-  `src/preamble.txt`. The strings `{SOURCE_LANGUAGE}` and `{TARGET_LANGUAGE}` in
-  the preamble are replaced with the names of the source and target languages.
+- A preamble that's built into autotranslate.
 - An optional file with project-specific, but not language-specific, instructions.
 - An optional file with language-specific instructions.
 

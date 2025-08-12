@@ -1,10 +1,35 @@
 import { readFileSync } from 'fs';
 import OpenAI from 'openai';
 import { zodTextFormat } from 'openai/helpers/zod';
-import { join } from 'path';
 import { z } from 'zod';
 
-import __dirname from './dirname.cjs';
+const PREAMBLE = `You are a translator who helps translate software from {SOURCE_LANGUAGE} to
+{TARGET_LANGUAGE}. You prioritize clarity, low ambiguity, and accuracy.
+
+Each input you'll get is from a file of strings that are shown in the
+software's user interface.  The strings are a mix of short text (button labels,
+menu items) and longer explanatory text.
+
+You may receive either a single string or multiple strings to translate:
+
+For single strings: The string to translate will be enclosed in three hash marks.
+After the string, there may also be a description with some additional context
+or explanation.
+
+For multiple strings: Each string will be preceded by ###key### where "key" is
+the identifier for that string. The text to translate follows immediately after.
+If there's a description, it will be on the next line starting with "Description:".
+
+You can use descriptions to help produce better translations. Don't translate the
+descriptions themselves.
+
+If a string doesn't form a complete sentence, but is a verb or verb phrase,
+assume it is a button label or menu item and use your language's conventions
+for that kind of thing, e.g., capitalization.
+
+Just return the translation(s), no additional commentary or explanation. Only
+translate the strings, not the additional context. You MUST NOT include the
+surrounding hash marks or keys in the translations.`;
 
 export interface OpenAIClient {
   responses: {
@@ -73,9 +98,7 @@ export class Translator {
     const parts: string[] = [];
 
     // Add preamble
-    const preamblePath = join(__dirname, 'preamble.txt');
-    const preamble = readFileSync(preamblePath, 'utf-8');
-    parts.push(preamble.replace('{SOURCE_LANGUAGE}', sourceLanguage).replace('{TARGET_LANGUAGE}', targetLanguage));
+    parts.push(PREAMBLE.replace('{SOURCE_LANGUAGE}', sourceLanguage).replace('{TARGET_LANGUAGE}', targetLanguage));
 
     // Add global instructions if provided
     if (globalInstructionsFile) {
