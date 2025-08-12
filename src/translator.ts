@@ -1,7 +1,10 @@
+import { config } from 'dotenv';
 import { readFileSync } from 'fs';
 import OpenAI from 'openai';
 import { zodTextFormat } from 'openai/helpers/zod';
 import { z } from 'zod';
+
+config();
 
 const PREAMBLE = `You are a translator who helps translate software from {SOURCE_LANGUAGE} to
 {TARGET_LANGUAGE}. You prioritize clarity, low ambiguity, and accuracy.
