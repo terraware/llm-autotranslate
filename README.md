@@ -11,7 +11,8 @@ Features:
 
 ## Usage
 
-The `OPENAI_API_KEY` environment variable must be set.
+The `OPENAI_API_KEY` environment variable must be set. Alternately, you can add
+it to the file `.env`.
 
 ```
 autotranslate [options]
@@ -70,7 +71,7 @@ following pieces:
 - An optional file with language-specific instructions.
 
 The instructions are the same for each OpenAI API request. The prompt changes from
-request to request and includes the text and description, propertly delimited as
+request to request and includes the text and description, properly delimited as
 described in the preamble.
 
 ## Config file
