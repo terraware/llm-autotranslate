@@ -5,7 +5,7 @@
   "license": "Apache-2.0",
   "main": "dist/index.js",
   "bin": {
-    "autotranslate": "dist/index.js"
+    "autotranslate": "dist/cli.js"
   },
   "scripts": {
     "build": "tsc",

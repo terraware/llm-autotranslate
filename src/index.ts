@@ -1,8 +1,5 @@
 #!/usr/bin/env node
-import chokidar from 'chokidar';
-import { Command } from 'commander';
-import { config } from 'dotenv';
-import { readFileSync, writeFileSync } from 'fs';
+import { writeFileSync } from 'fs';
 
 import { readSourceFile, readTargetFile, writeTargetFile } from './file-io.js';
 import { StringRecord } from './formats/index.js';
@@ -14,12 +11,6 @@ import { BatchTranslationRequest, Translator } from './translator.js';
 // Re-export useful types for library users
 export { Logger, ConsoleLogger, SilentLogger, PrefixedLogger } from './logger.js';
 export { Translator } from './translator.js';
-
-interface CliOptions {
-  config: string;
-  verbose: boolean;
-  watch: boolean;
-}
 
 export interface OutputSpec {
   format: string;
@@ -45,44 +36,6 @@ export interface AutotranslateConfig {
   };
   targets: TargetLanguageConfig[];
   verbose?: boolean;
-}
-
-interface ParsedOptions {
-  config: AutotranslateConfig;
-  watch: boolean;
-}
-
-function parseCommandLine(): ParsedOptions {
-  const program = new Command();
-
-  program
-    .name('autotranslate')
-    .description('A utility for automated translation of strings for localizable software')
-    .version('1.0.0')
-    .option('--config <path>', 'Optional path to the config file to use', 'autotranslate.json')
-    .option('--watch', 'Run continuously, watching for modifications to the source-language CSV file')
-    .option('-v, --verbose', 'Show details of the configuration and the progress of the translations')
-    .parse();
-
-  const options = program.opts() as CliOptions;
-
-  // Read and parse config file
-  try {
-    const configContent = readFileSync(options.config, 'utf-8');
-    const config = JSON.parse(configContent) as AutotranslateConfig;
-
-    // Set verbose mode - command line option overrides config file
-    config.verbose = options.verbose || config.verbose;
-
-    return { config, watch: options.watch };
-  } catch (error) {
-    if (error instanceof Error) {
-      console.error(`Error reading config file ${options.config}: ${error.message}`);
-    } else {
-      console.error(`Error reading config file ${options.config}: ${String(error)}`);
-    }
-    process.exit(1);
-  }
 }
 
 export async function autotranslate(config: AutotranslateConfig): Promise<void> {
@@ -163,79 +116,6 @@ export async function autotranslate(config: AutotranslateConfig): Promise<void> 
   await executeAllFileWrites(processingResults, logger);
 
   logger.log('\nAutotranslate completed successfully!');
-}
-
-async function main() {
-  try {
-    const { config, watch } = parseCommandLine();
-
-    if (watch) {
-      await runWatchMode(config);
-    } else {
-      await autotranslate(config);
-    }
-  } catch (error) {
-    console.error('Error:', error instanceof Error ? error.message : String(error));
-    process.exit(1);
-  }
-}
-
-async function runWatchMode(config: AutotranslateConfig) {
-  const logger = new ConsoleLogger(config.verbose ?? false);
-
-  logger.log('Starting watch mode...');
-  logger.log(`Watching: ${config.source.file}`);
-  logger.log('Press Ctrl+C to stop.\n');
-
-  // Run initial translation
-  await autotranslate(config);
-
-  // Set up file watcher with chokidar
-  let isProcessing = false;
-
-  const watcher = chokidar.watch(config.source.file, {
-    ignoreInitial: true, // Don't trigger on initial scan
-    persistent: true,
-    usePolling: false, // Use native file system events when possible
-    awaitWriteFinish: {
-      stabilityThreshold: 300, // Wait for file to be stable for 300ms
-      pollInterval: 100, // Check every 100ms
-    },
-  });
-
-  watcher.on('change', async () => {
-    if (isProcessing) {
-      return; // Avoid overlapping runs
-    }
-
-    isProcessing = true;
-    logger.log(`\n[${new Date().toLocaleTimeString()}] Source file changed, updating translations...`);
-
-    try {
-      await autotranslate(config);
-      logger.log(`[${new Date().toLocaleTimeString()}] Translations updated successfully.\n`);
-    } catch (error) {
-      logger.error(
-        `[${new Date().toLocaleTimeString()}] Translation update failed: ${error instanceof Error ? error.message : String(error)}\n`
-      );
-    } finally {
-      isProcessing = false;
-    }
-  });
-
-  watcher.on('error', (error) => {
-    logger.error(`Watcher error: ${error instanceof Error ? error.message : String(error)}`);
-  });
-
-  // Handle graceful shutdown
-  process.on('SIGINT', async () => {
-    logger.log('\nStopping watch mode...');
-    await watcher.close();
-    process.exit(0);
-  });
-
-  // Keep the process alive
-  process.stdin.resume();
 }
 
 interface TranslationCandidate {
@@ -595,14 +475,4 @@ async function executeSourceOutputFiles(
       );
     }
   }
-}
-
-// Only run main if this file is executed directly (not imported as a library)
-// Skip if running in Jest test environment
-if (typeof process.env.JEST_WORKER_ID === 'undefined') {
-  config({ quiet: true });
-  main().catch((error) => {
-    console.error('Error:', error instanceof Error ? error.message : String(error));
-    process.exit(1);
-  });
 }
