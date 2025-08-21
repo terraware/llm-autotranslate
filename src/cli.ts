@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import { readFileSync } from 'fs';
 
 import { AutotranslateConfig, autotranslate } from './index.js';
-import { ConsoleLogger } from './logger.js';
+import { ConsoleLogger, renderErrorMessage } from './logger.js';
 
 interface CliOptions {
   config: string;
@@ -36,16 +36,12 @@ function parseCommandLine(): ParsedOptions {
     const configContent = readFileSync(options.config, 'utf-8');
     const config = JSON.parse(configContent) as AutotranslateConfig;
 
-    // Set verbose mode - command line option overrides config file
+    // Command line --verbose overrides "verbose":false in config file
     config.verbose = options.verbose || config.verbose;
 
     return { config, watch: options.watch };
   } catch (error) {
-    if (error instanceof Error) {
-      console.error(`Error reading config file ${options.config}: ${error.message}`);
-    } else {
-      console.error(`Error reading config file ${options.config}: ${String(error)}`);
-    }
+    console.error(renderErrorMessage(`Error reading config file ${options.config}`, error));
     process.exit(1);
   }
 }
@@ -61,7 +57,7 @@ async function main() {
       await autotranslate(config);
     }
   } catch (error) {
-    console.error('Error:', error instanceof Error ? error.message : String(error));
+    console.error(renderErrorMessage('Error', error));
     process.exit(1);
   }
 }
@@ -93,9 +89,7 @@ async function runWatchMode(config: AutotranslateConfig) {
         await autotranslate(config);
         logger.log(`[${new Date().toLocaleTimeString()}] Translations updated successfully.\n`);
       } catch (error) {
-        logger.error(
-          `[${new Date().toLocaleTimeString()}] Translation update failed: ${error instanceof Error ? error.message : String(error)}\n`
-        );
+        logger.error(`[${new Date().toLocaleTimeString()}] Translation update failed`, error);
       } finally {
         isProcessing = false;
       }
@@ -113,7 +107,7 @@ async function runWatchMode(config: AutotranslateConfig) {
   watcher.on('change', processTranslationUpdates);
 
   watcher.on('error', (error) => {
-    logger.error(`Watcher error: ${error instanceof Error ? error.message : String(error)}`);
+    logger.error('Watcher error', error);
   });
 
   process.on('SIGINT', async () => {
@@ -124,6 +118,6 @@ async function runWatchMode(config: AutotranslateConfig) {
 }
 
 main().catch((error) => {
-  console.error('Error:', error instanceof Error ? error.message : String(error));
+  console.error(renderErrorMessage('Error', error));
   process.exit(1);
 });
