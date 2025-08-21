@@ -215,11 +215,9 @@ async function translateIndividually(
         hash: sourceRecord.hash,
       });
 
-      logger.log(`  ✓ ${key}: ${sourceRecord.text} → ${translatedText}`);
+      logger.log(`  ${key}: ${sourceRecord.text} -> ${translatedText}`);
     } catch (error) {
-      logger.error(
-        `Failed to translate "${sourceRecord.text}": ${error instanceof Error ? error.message : String(error)}`
-      );
+      logger.error(`Failed to translate "${sourceRecord.text}"`, error);
       throw error;
     }
   }
@@ -273,7 +271,7 @@ async function translateInBatches(
         logger.log(`  ✓ ${key}: ${sourceRecord.text} → ${translatedText}`);
       }
     } catch (error) {
-      logger.error(`Batch translation failed: ${error instanceof Error ? error.message : String(error)}`);
+      logger.error('Batch translation failed', error);
       logger.log(`Falling back to individual translations for this batch...`);
 
       // Fallback to individual translations for this batch
@@ -296,9 +294,7 @@ async function translateInBatches(
 
           logger.log(`    ✓ ${key}: ${text} → ${translatedText}`);
         } catch (individualError) {
-          logger.error(
-            `Failed to translate "${text}": ${individualError instanceof Error ? individualError.message : String(individualError)}`
-          );
+          logger.error(`Failed to translate "${text}"`, individualError);
           throw individualError;
         }
       }

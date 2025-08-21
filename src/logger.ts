@@ -1,6 +1,15 @@
+export function renderErrorMessage(message: string, error?: any): string {
+  if (error !== undefined) {
+    const errorString = error instanceof Error ? error.message : String(error);
+    return `${message}: ${errorString}`;
+  } else {
+    return message;
+  }
+}
+
 export interface Logger {
   log(message: string): void;
-  error(message: string): void;
+  error(message: string, error?: any): void;
 }
 
 export class ConsoleLogger implements Logger {
@@ -12,8 +21,8 @@ export class ConsoleLogger implements Logger {
     }
   }
 
-  error(message: string): void {
-    console.error(message);
+  error(message: string, error?: any): void {
+    console.error(renderErrorMessage(message, error));
   }
 }
 
@@ -22,8 +31,8 @@ export class SilentLogger implements Logger {
     // Do nothing
   }
 
-  error(message: string): void {
-    console.error(message);
+  error(message: string, error?: any): void {
+    console.error(renderErrorMessage(message, error));
   }
 }
 
@@ -37,7 +46,7 @@ export class PrefixedLogger implements Logger {
     this.baseLogger.log(`[${this.prefix}] ${message}`);
   }
 
-  error(message: string): void {
-    this.baseLogger.error(`[${this.prefix}] ${message}`);
+  error(message: string, error?: any): void {
+    this.baseLogger.error(`[${this.prefix}] ${message}`, error);
   }
 }
