@@ -11,11 +11,13 @@ interface CliOptions {
   config: string;
   verbose: boolean;
   watch: boolean;
+  updateHashes: boolean;
 }
 
 interface ParsedOptions {
   config: AutotranslateConfig;
   watch: boolean;
+  updateHashes: boolean;
 }
 
 function parseCommandLine(): ParsedOptions {
@@ -26,8 +28,9 @@ function parseCommandLine(): ParsedOptions {
     .description('A utility for automated translation of strings for localizable software')
     .version('1.0.0')
     .option('--config <path>', 'Optional path to the config file to use', 'autotranslate.json')
-    .option('--watch', 'Run continuously, watching for modifications to the source-language CSV file')
+    .option('--update-hashes', 'Update hashes in target files without generating new translations')
     .option('-v, --verbose', 'Show details of the configuration and the progress of the translations')
+    .option('--watch', 'Run continuously, watching for modifications to the source-language CSV file')
     .parse();
 
   const options = program.opts() as CliOptions;
@@ -40,7 +43,7 @@ function parseCommandLine(): ParsedOptions {
     // Command line --verbose overrides "verbose":false in config file
     config.verbose = options.verbose || config.verbose;
 
-    return { config, watch: options.watch };
+    return { config, watch: options.watch, updateHashes: options.updateHashes };
   } catch (error) {
     console.error(renderErrorMessage(`Error reading config file ${options.config}`, error));
     process.exit(1);
@@ -50,10 +53,18 @@ function parseCommandLine(): ParsedOptions {
 async function main() {
   try {
     dotenv.config({ quiet: true });
-    const { config, watch } = parseCommandLine();
+    const { config, watch, updateHashes } = parseCommandLine();
+
+    if (watch && updateHashes) {
+      console.error('Error: --watch and --update-hashes cannot be used together');
+      process.exit(1);
+    }
 
     if (watch) {
       await runWatchMode(config);
+    } else if (updateHashes) {
+      const { updateHashes: updateHashesFunction } = await import('./updateHashes.js');
+      await updateHashesFunction(config);
     } else {
       await autotranslate(config);
     }

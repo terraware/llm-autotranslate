@@ -22,13 +22,16 @@ Options:
 
 - `--config <path>`: Optional path to the config file to use. If not specified,
   defaults to `autotranslate.json`. See below for details on the config file.
+- `--update-hashes`: Update hashes in target files without generating new
+  translations. Use this when you have existing translations and want to start
+  using autotranslate without retranslating everything.
+- `--verbose` or `-v`: Show details of the configuration and the progress of
+  the translations. Default is to run silently unless there's an error. Verbose
+  mode may also be enabled in the config file.
 - `--watch`: Run continuously, watching for modifications to the source-language
   strings file and updating the target-language files as needed. Useful in dev
   environments to automatically keep translations up to date as original strings
   are edited.
-- `--verbose` or `-v`: Show details of the configuration and the progress of
-  the translations. Default is to run silently unless there's an error. Verbose
-  mode may also be enabled in the config file.
 
 ## Strings files
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { writeFileSync } from 'fs';
 
+import { AutotranslateConfig, OutputSpec, TargetLanguageConfig, validateConfig } from './config.js';
 import { readSourceFile, readTargetFile, writeTargetFile } from './file-io.js';
 import { StringRecord } from './formats/index.js';
 import { outputRegistry } from './formats/registries.js';
@@ -9,37 +10,11 @@ import { SourceRecord, TargetRecord } from './records.js';
 import { BatchTranslationRequest, Translator } from './translator.js';
 
 // Re-export useful types for library users
+export { AutotranslateConfig } from './config.js';
 export { Logger, ConsoleLogger, SilentLogger, PrefixedLogger } from './logger.js';
 export { Translator } from './translator.js';
 
-export interface OutputSpec {
-  format: string;
-  file: string;
-}
-
-export interface TargetLanguageConfig {
-  language: string;
-  file: string;
-  format?: string;
-  instructions?: string;
-  outputs?: OutputSpec[];
-}
-
-export interface AutotranslateConfig {
-  batchSize?: number;
-  instructions?: string;
-  source: {
-    file: string;
-    format?: string;
-    language?: string;
-    outputs?: OutputSpec[];
-  };
-  targets: TargetLanguageConfig[];
-  verbose?: boolean;
-}
-
 export async function autotranslate(config: AutotranslateConfig): Promise<void> {
-  // Set defaults
   const finalConfig = {
     batchSize: config.batchSize ?? 15,
     instructions: config.instructions,
@@ -47,29 +22,12 @@ export async function autotranslate(config: AutotranslateConfig): Promise<void> 
     targets: config.targets,
     verbose: config.verbose ?? false,
   };
+
+  validateConfig(finalConfig);
+
   const sourceLanguage = finalConfig.source.language ?? 'English';
 
-  // Create logger
   const logger = new ConsoleLogger(finalConfig.verbose);
-
-  // Validate configuration
-  if (!finalConfig.source?.file) {
-    throw new Error('Config must specify source.file');
-  }
-
-  if (!finalConfig.targets || finalConfig.targets.length === 0) {
-    throw new Error('Config must specify at least one target language');
-  }
-
-  for (const target of finalConfig.targets) {
-    if (!target.language || !target.file) {
-      throw new Error('Each target must specify both language and file');
-    }
-  }
-
-  if (!Number.isInteger(finalConfig.batchSize) || finalConfig.batchSize < 1) {
-    throw new Error('batchSize must be a positive integer');
-  }
 
   logger.debug(`Autotranslate starting...`);
   logger.debug(`Source file: ${finalConfig.source.file}`);
@@ -85,18 +43,13 @@ export async function autotranslate(config: AutotranslateConfig): Promise<void> 
     logger.debug(`Language-specific instruction files: ${languageInstructionCount}`);
   }
 
-  // Step 1: Read source-language strings file (hashes calculated during read)
-  logger.debug(`Reading source file: ${finalConfig.source.file}`);
   const sourceRecords = await readSourceFile(finalConfig.source.file, finalConfig.source.format);
-  logger.debug(`Found ${sourceRecords.length} source strings`);
 
-  // Step 2: Create source map for easy lookup
   const sourceMap = new Map<string, SourceRecord>();
   for (const record of sourceRecords) {
     sourceMap.set(record.key, record);
   }
 
-  // Step 3: Process all target languages concurrently (without writing files yet)
   const processingPromises = finalConfig.targets.map((target) =>
     processTargetLanguage(
       sourceLanguage,
@@ -111,7 +64,6 @@ export async function autotranslate(config: AutotranslateConfig): Promise<void> 
 
   const processingResults = await Promise.all(processingPromises);
 
-  // Step 4: Write all files at once
   await executeSourceOutputFiles(finalConfig.source.outputs, sourceRecords, logger);
   await executeAllFileWrites(processingResults, logger);
 
