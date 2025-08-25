@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import chokidar from 'chokidar';
 import { Command } from 'commander';
 import dotenv from 'dotenv';

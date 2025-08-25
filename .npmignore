@@ -1,0 +1,5 @@
+*
+
+# Include dist files, but not tests
+!dist/*.*
+!dist/formats/*
