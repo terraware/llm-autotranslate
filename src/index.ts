@@ -71,24 +71,24 @@ export async function autotranslate(config: AutotranslateConfig): Promise<void> 
     throw new Error('batchSize must be a positive integer');
   }
 
-  logger.log(`Autotranslate starting...`);
-  logger.log(`Source file: ${finalConfig.source.file}`);
-  logger.log(`Target languages: ${finalConfig.targets.map((t) => `${t.language} (${t.file})`).join(', ')}`);
-  logger.log(`Batch size: ${finalConfig.batchSize}`);
+  logger.debug(`Autotranslate starting...`);
+  logger.debug(`Source file: ${finalConfig.source.file}`);
+  logger.debug(`Target languages: ${finalConfig.targets.map((t) => `${t.language} (${t.file})`).join(', ')}`);
+  logger.debug(`Batch size: ${finalConfig.batchSize}`);
 
   if (finalConfig.instructions) {
-    logger.log(`Global instructions file: ${finalConfig.instructions}`);
+    logger.debug(`Global instructions file: ${finalConfig.instructions}`);
   }
 
   const languageInstructionCount = finalConfig.targets.filter((t) => t.instructions).length;
   if (languageInstructionCount > 0) {
-    logger.log(`Language-specific instruction files: ${languageInstructionCount}`);
+    logger.debug(`Language-specific instruction files: ${languageInstructionCount}`);
   }
 
   // Step 1: Read source-language strings file (hashes calculated during read)
-  logger.log(`\nReading source file: ${finalConfig.source.file}`);
+  logger.debug(`Reading source file: ${finalConfig.source.file}`);
   const sourceRecords = await readSourceFile(finalConfig.source.file, finalConfig.source.format);
-  logger.log(`Found ${sourceRecords.length} source strings`);
+  logger.debug(`Found ${sourceRecords.length} source strings`);
 
   // Step 2: Create source map for easy lookup
   const sourceMap = new Map<string, SourceRecord>();
@@ -115,7 +115,7 @@ export async function autotranslate(config: AutotranslateConfig): Promise<void> 
   await executeSourceOutputFiles(finalConfig.source.outputs, sourceRecords, logger);
   await executeAllFileWrites(processingResults, logger);
 
-  logger.log('\nAutotranslate completed successfully!');
+  logger.debug('Autotranslate completed successfully');
 }
 
 interface TranslationCandidate {
@@ -141,14 +141,14 @@ async function readAndFilterExistingRecords(
     existingMap.set(record.key, record);
   }
 
-  logger.log(`Found ${existingRecords.length} existing strings`);
+  logger.debug(`Found ${existingRecords.length} existing strings`);
 
   const validKeys = new Set(sourceMap.keys());
   let removedCount = 0;
   const filteredExisting = existingRecords.filter((record) => {
     const isValid = validKeys.has(record.key);
     if (!isValid) {
-      logger.log(`Removing obsolete key: ${record.key}`);
+      logger.debug(`Removing obsolete key: ${record.key}`);
       removedCount++;
     }
     return isValid;
@@ -173,7 +173,7 @@ function identifyTranslationCandidates(
     }
   }
 
-  logger.log(`Need to translate ${stringsToTranslate.length} strings for ${language}`);
+  logger.debug(`Need to translate ${stringsToTranslate.length} strings for ${language}`);
 
   return stringsToTranslate;
 }
@@ -199,12 +199,12 @@ async function translateIndividually(
   translator: Translator,
   logger: Logger
 ): Promise<TargetRecord[]> {
-  logger.log(`Translating ${candidates.length} strings individually (batch size = 1)`);
+  logger.info(`Translating ${candidates.length} strings individually (batch size = 1)`);
 
   const newRecords: TargetRecord[] = [];
 
   for (const { key, sourceRecord } of candidates) {
-    logger.log(`Translating: ${key}`);
+    logger.debug(`Translating: ${key}`);
 
     try {
       const translatedText = await translator.translate(sourceRecord.text, sourceRecord.description);
@@ -215,7 +215,7 @@ async function translateIndividually(
         hash: sourceRecord.hash,
       });
 
-      logger.log(`  ${key}: ${sourceRecord.text} -> ${translatedText}`);
+      logger.debug(`  ${key}: ${sourceRecord.text} -> ${translatedText}`);
     } catch (error) {
       logger.error(`Failed to translate "${sourceRecord.text}"`, error);
       throw error;
@@ -248,7 +248,7 @@ async function translateInBatches(
     const batchStart = batchIndex * batchSize + 1;
     const batchEnd = Math.min((batchIndex + 1) * batchSize, candidates.length);
 
-    logger.log(`Translating batch ${batchIndex + 1}/${batches.length} (strings ${batchStart}-${batchEnd})`);
+    logger.info(`Translating batch ${batchIndex + 1}/${batches.length} (strings ${batchStart}-${batchEnd})`);
 
     try {
       const translations = await translator.translateBatch(batch);
@@ -268,15 +268,15 @@ async function translateInBatches(
           hash: sourceRecord.hash,
         });
 
-        logger.log(`  ✓ ${key}: ${sourceRecord.text} → ${translatedText}`);
+        logger.debug(`  ${key}: ${sourceRecord.text} -> ${translatedText}`);
       }
     } catch (error) {
       logger.error('Batch translation failed', error);
-      logger.log(`Falling back to individual translations for this batch...`);
+      logger.debug(`Falling back to individual translations for this batch...`);
 
       // Fallback to individual translations for this batch
       for (const { key, text, description } of batch) {
-        logger.log(`  Translating individually: ${key}`);
+        logger.debug(`  Translating individually: ${key}`);
 
         try {
           const sourceRecord = candidates.find((s) => s.key === key)?.sourceRecord;
@@ -292,7 +292,7 @@ async function translateInBatches(
             hash: sourceRecord.hash,
           });
 
-          logger.log(`    ✓ ${key}: ${text} → ${translatedText}`);
+          logger.debug(`    ${key}: ${text} -> ${translatedText}`);
         } catch (individualError) {
           logger.error(`Failed to translate "${text}"`, individualError);
           throw individualError;
@@ -328,7 +328,7 @@ async function processTargetLanguage(
 ): Promise<ProcessingResult> {
   const prefixedLogger = new PrefixedLogger(logger, target.language);
 
-  prefixedLogger.log(`Processing ${target.language} (${target.file})`);
+  prefixedLogger.debug(`Processing ${target.language} (${target.file})`);
 
   // Step 1: Read and filter existing records
   const { filteredExisting, existingMap, removedCount } = await readAndFilterExistingRecords(
@@ -343,7 +343,7 @@ async function processTargetLanguage(
 
   // Check if any changes are needed (no translations needed and no records removed)
   if (candidates.length === 0 && removedCount === 0) {
-    prefixedLogger.log(`No changes needed for ${target.file}`);
+    prefixedLogger.debug(`No changes needed for ${target.file}`);
     const existingRecords = preserveExistingTranslations(filteredExisting, sourceMap);
     return {
       target,
@@ -370,7 +370,7 @@ async function processTargetLanguage(
   // Step 5: Sort records (writing will happen later)
   updatedRecords.sort((a, b) => a.key.localeCompare(b.key));
 
-  prefixedLogger.log(`Prepared ${updatedRecords.length} strings for ${target.file}`);
+  prefixedLogger.debug(`Prepared ${updatedRecords.length} strings for ${target.file}`);
 
   return {
     target,
@@ -380,14 +380,14 @@ async function processTargetLanguage(
 }
 
 async function executeAllFileWrites(processingResults: ProcessingResult[], logger: Logger): Promise<void> {
-  logger.log('\nWriting all files...');
+  logger.debug('Writing all files...');
 
   // Write target files
   for (const result of processingResults) {
     if (result.hasChanges) {
       const prefixedLogger = new PrefixedLogger(logger, result.target.language);
       await writeTargetFile(result.target.file, result.updatedRecords, result.target.format);
-      prefixedLogger.log(`Updated ${result.target.file} with ${result.updatedRecords.length} strings`);
+      prefixedLogger.info(`Updated ${result.target.file} with ${result.updatedRecords.length} strings`);
     }
   }
 
@@ -427,7 +427,7 @@ async function executeTargetOutputFiles(
 
       const content = formatter.format(stringRecords);
       writeFileSync(output.file, content, 'utf-8');
-      prefixedLogger.log(`Generated ${output.format} output: ${output.file}`);
+      prefixedLogger.debug(`Generated ${output.format} output: ${output.file}`);
     } catch (error) {
       prefixedLogger.error(
         `Failed to generate ${output.format} output ${output.file}: ${error instanceof Error ? error.message : String(error)}`
@@ -464,7 +464,7 @@ async function executeSourceOutputFiles(
 
       const content = formatter.format(stringRecords);
       writeFileSync(output.file, content, 'utf-8');
-      prefixedLogger.log(`Generated ${output.format} output: ${output.file}`);
+      prefixedLogger.debug(`Generated ${output.format} output: ${output.file}`);
     } catch (error) {
       prefixedLogger.error(
         `Failed to generate ${output.format} output ${output.file}: ${error instanceof Error ? error.message : String(error)}`

@@ -65,9 +65,8 @@ async function main() {
 async function runWatchMode(config: AutotranslateConfig) {
   const logger = new ConsoleLogger(config.verbose ?? false);
 
-  logger.log('Starting watch mode...');
-  logger.log(`Watching: ${config.source.file}`);
-  logger.log('Press Ctrl+C to stop.\n');
+  logger.info(`Watching: ${config.source.file}`);
+  logger.info('Press Ctrl+C to stop.');
 
   // If the source file changes while we're in the middle of translating the previous version,
   // we want to wait until the original run is done then scan the file again.
@@ -83,13 +82,13 @@ async function runWatchMode(config: AutotranslateConfig) {
     while (needsScan) {
       needsScan = false;
       isProcessing = true;
-      logger.log(`\n[${new Date().toLocaleTimeString()}] Source file changed, updating translations...`);
+      logger.debug('Source file changed; updating translations');
 
       try {
         await autotranslate(config);
-        logger.log(`[${new Date().toLocaleTimeString()}] Translations updated successfully.\n`);
+        logger.info('Translations updated successfully');
       } catch (error) {
-        logger.error(`[${new Date().toLocaleTimeString()}] Translation update failed`, error);
+        logger.error('Translation update failed', error);
       } finally {
         isProcessing = false;
       }
@@ -111,7 +110,7 @@ async function runWatchMode(config: AutotranslateConfig) {
   });
 
   process.on('SIGINT', async () => {
-    logger.log('\nStopping watch mode...');
+    logger.debug('\nStopping watch mode...');
     await watcher.close();
     process.exit(0);
   });
