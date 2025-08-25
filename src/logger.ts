@@ -8,17 +8,22 @@ export function renderErrorMessage(message: string, error?: any): string {
 }
 
 export interface Logger {
-  log(message: string): void;
+  debug(message: string): void;
+  info(message: string): void;
   error(message: string, error?: any): void;
 }
 
 export class ConsoleLogger implements Logger {
   constructor(private verbose: boolean = false) {}
 
-  log(message: string): void {
+  debug(message: string): void {
     if (this.verbose) {
       console.log(message);
     }
+  }
+
+  info(message: string): void {
+    console.log(message);
   }
 
   error(message: string, error?: any): void {
@@ -27,7 +32,11 @@ export class ConsoleLogger implements Logger {
 }
 
 export class SilentLogger implements Logger {
-  log(): void {
+  debug(): void {
+    // Do nothing
+  }
+
+  info(): void {
     // Do nothing
   }
 
@@ -42,8 +51,12 @@ export class PrefixedLogger implements Logger {
     private prefix: string
   ) {}
 
-  log(message: string): void {
-    this.baseLogger.log(`[${this.prefix}] ${message}`);
+  debug(message: string): void {
+    this.baseLogger.debug(`[${this.prefix}] ${message}`);
+  }
+
+  info(message: string): void {
+    this.baseLogger.info(`[${this.prefix}] ${message}`);
   }
 
   error(message: string, error?: any): void {
