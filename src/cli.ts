@@ -89,6 +89,7 @@ async function runWatchMode(config: AutotranslateConfig) {
     needsScan = true;
 
     if (isProcessing) {
+      logger.debug('Already processing; deferring update');
       return;
     }
 
@@ -98,8 +99,11 @@ async function runWatchMode(config: AutotranslateConfig) {
       logger.debug('Source file changed; updating translations');
 
       try {
-        await autotranslate(config);
-        logger.info('Translations updated successfully');
+        const processingResults = await autotranslate(config);
+        const hasChanges = processingResults.find((result) => result.hasChanges);
+        if (hasChanges || config.verbose) {
+          logger.info(`Translations updated`);
+        }
       } catch (error) {
         logger.error('Translation update failed', error);
       } finally {
@@ -109,10 +113,13 @@ async function runWatchMode(config: AutotranslateConfig) {
   };
 
   const watcher = chokidar.watch(config.source.file, {
+    atomic: true,
     awaitWriteFinish: {
-      stabilityThreshold: 300,
+      stabilityThreshold: 299,
       pollInterval: 100,
     },
+    interval: 100,
+    usePolling: true,
   });
 
   watcher.on('add', processTranslationUpdates);

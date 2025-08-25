@@ -14,7 +14,7 @@ export { AutotranslateConfig } from './config.js';
 export { Logger, ConsoleLogger, SilentLogger, PrefixedLogger } from './logger.js';
 export { Translator } from './translator.js';
 
-export async function autotranslate(config: AutotranslateConfig): Promise<void> {
+export async function autotranslate(config: AutotranslateConfig): Promise<ProcessingResult[]> {
   const finalConfig = {
     batchSize: config.batchSize ?? 15,
     instructions: config.instructions,
@@ -68,6 +68,8 @@ export async function autotranslate(config: AutotranslateConfig): Promise<void> 
   await executeAllFileWrites(processingResults, logger);
 
   logger.debug('Autotranslate completed successfully');
+
+  return processingResults;
 }
 
 interface TranslationCandidate {
