@@ -1,4 +1,4 @@
-# Autotranslate
+# LLM Autotranslate
 
 A utility for automated translation of strings for localizable software.
 
