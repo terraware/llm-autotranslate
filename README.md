@@ -21,7 +21,7 @@ autotranslate [options]
 Options:
 
 - `--config <path>`: Optional path to the config file to use. If not specified,
-  defaults to `autotranslate.json`.
+  defaults to `autotranslate.json`. See below for details on the config file.
 - `--watch`: Run continuously, watching for modifications to the source-language
   strings file and updating the target-language files as needed. Useful in dev
   environments to automatically keep translations up to date as original strings
@@ -30,7 +30,7 @@ Options:
   the translations. Default is to run silently unless there's an error. Verbose
   mode may also be enabled in the config file.
 
-## Overview
+## Strings files
 
 Strings are defined in strings files. There is a file for the source language that
 is edited by hand. Strings may be added to and removed from the source-language
@@ -39,38 +39,6 @@ strings file, or existing strings may be edited.
 Each target language also has its own file. The target-language files are updated
 by autotranslate. They may also be edited by hand if developers want to modify any
 of the translations.
-
-When you run autotranslate, it does the following:
-
-1. Reads the source-language strings file.
-2. Calculates the hash of each string+description in the source-language file.
-3. For each of the target languages:
-   1. Reads the target language's strings file, if it exists.
-   2. Removes the rows for any keys that don't exist in the source-language file.
-   3. If a key doesn't exist in the target-language file, OR if the hash that
-      was recorded in the target-language file doesn't match the current hash from
-      the source-language file, generates a new translation using the OpenAI API.
-   4. Writes the updated target-language file.
-
-The above is a conceptual description; in reality, some of the operations may be
-batched or done in parallel.
-
-## Translation generation
-
-Translations are generated using the OpenAI Responses API:
-
-https://platform.openai.com/docs/api-reference/responses
-
-The value of the "instructions" field in the API request is constructed from the
-following pieces:
-
-- A preamble that's built into autotranslate.
-- An optional file with project-specific, but not language-specific, instructions.
-- An optional file with language-specific instructions.
-
-The instructions are the same for each OpenAI API request. The prompt changes from
-request to request and includes the text and description, properly delimited as
-described in the preamble.
 
 ## Config file
 
@@ -235,3 +203,37 @@ export const strings = {
   DEF: 'Some other text',
 };
 ```
+
+## How it works
+
+When you run autotranslate, it does the following:
+
+1. Reads the source-language strings file.
+2. Calculates the hash of each string+description in the source-language file.
+3. For each of the target languages:
+   1. Reads the target language's strings file, if it exists.
+   2. Removes the rows for any keys that don't exist in the source-language file.
+   3. If a key doesn't exist in the target-language file, OR if the hash that
+      was recorded in the target-language file doesn't match the current hash from
+      the source-language file, generates a new translation using the OpenAI API.
+   4. Writes the updated target-language file.
+
+The above is a conceptual description; in reality, some of the operations may be
+batched or done in parallel.
+
+### Translation generation
+
+Translations are generated using the OpenAI Responses API:
+
+https://platform.openai.com/docs/api-reference/responses
+
+The value of the "instructions" field in the API request is constructed from the
+following pieces:
+
+- A preamble that's built into autotranslate.
+- An optional file with project-specific, but not language-specific, instructions.
+- An optional file with language-specific instructions.
+
+The instructions are the same for each OpenAI API request. The prompt changes from
+request to request and includes the text and description, properly delimited as
+described in the preamble.
