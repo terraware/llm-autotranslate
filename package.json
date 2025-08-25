@@ -1,7 +1,7 @@
 {
-  "name": "autotranslate",
+  "name": "llm-autotranslate",
   "version": "1.0.0",
-  "description": "A utility for automated translation of strings for localizable software",
+  "description": "A utility for LLM-based automated translation of strings for localizable software",
   "license": "Apache-2.0",
   "main": "dist/index.js",
   "bin": {
