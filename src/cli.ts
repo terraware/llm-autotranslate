@@ -86,8 +86,9 @@ async function runWatchMode(config: AutotranslateConfig) {
   let needsScan = true;
 
   const processTranslationUpdates = async () => {
+    needsScan = true;
+
     if (isProcessing) {
-      needsScan = true;
       return;
     }
 
