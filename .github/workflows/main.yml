@@ -11,12 +11,20 @@ concurrency:
   # Cancel in-progress builds on PRs.
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
+permissions:
+  contents: write # needed for committing changelog and tags
+  issues: write
+  packages: write
+  pull-requests: write
+
 jobs:
   check:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # semantic-release needs full history + tags
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4
@@ -38,7 +46,7 @@ jobs:
             ${{ runner.os }}-yarn-
 
       - name: Install dependencies
-        run: yarn
+        run: yarn install --frozen-lockfile
 
       # This is currently failing because the server hasn't been started yet.
       # Additionally, it's not enough to just output the generated types file.
@@ -57,3 +65,9 @@ jobs:
 
       - name: Run tests
         run: yarn test
+
+      - name: Create release if needed
+        run: yarn semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
