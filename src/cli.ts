@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 import chokidar from 'chokidar';
 import { Command } from 'commander';
-import { createRequire } from "node:module";
 import dotenv from 'dotenv';
 import { readFileSync } from 'fs';
+import { createRequire } from 'node:module';
 
 import { AutotranslateConfig, autotranslate } from './index.js';
 import { ConsoleLogger, renderErrorMessage } from './logger.js';
 
 const require = createRequire(import.meta.url);
-const { version } = require("../package.json");
+const { version } = require('../package.json');
 
 interface CliOptions {
   config: string;

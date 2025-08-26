@@ -14,7 +14,7 @@ export { AutotranslateConfig } from './config.js';
 export { Logger, ConsoleLogger, SilentLogger, PrefixedLogger } from './logger.js';
 export { Translator } from './translator.js';
 
-export async function autotranslate(config: AutotranslateConfig): Promise<ProcessingResult[]> {
+export async function autotranslate(config: AutotranslateConfig, logger?: Logger): Promise<ProcessingResult[]> {
   const finalConfig = {
     batchSize: config.batchSize ?? 15,
     instructions: config.instructions,
@@ -27,7 +27,7 @@ export async function autotranslate(config: AutotranslateConfig): Promise<Proces
 
   const sourceLanguage = finalConfig.source.language ?? 'English';
 
-  const logger = new ConsoleLogger(finalConfig.verbose);
+  logger = logger || new ConsoleLogger(finalConfig.verbose);
 
   logger.debug(`Autotranslate starting...`);
   logger.debug(`Source file: ${finalConfig.source.file}`);
