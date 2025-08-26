@@ -48,12 +48,6 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
-      # This is currently failing because the server hasn't been started yet.
-      # Additionally, it's not enough to just output the generated types file.
-      # We need to create a script that checks that our types file is up to date.
-      #- name: generate schemas
-      #  run: yarn generate-types
-
       - name: Check that code is formatted
         run: yarn prettier --check .
 
