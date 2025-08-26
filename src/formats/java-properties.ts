@@ -7,7 +7,7 @@ import { BidirectionalFormatter, StringRecord } from './index.js';
 
 export class JavaPropertiesFormatter implements BidirectionalFormatter {
   format(records: StringRecord[]): string {
-    const lines: string[] = [];
+    const lines: string[] = ['# encoding: UTF-8'];
 
     for (const record of records) {
       if (record.description && record.description.trim()) {
@@ -61,6 +61,11 @@ export class JavaPropertiesFormatter implements BidirectionalFormatter {
       // Skip empty lines
       if (!line) {
         currentComment = '';
+        continue;
+      }
+
+      // Ignore encoding if it's the first line of the file
+      if (line.startsWith('# encoding:') && i === 0) {
         continue;
       }
 
