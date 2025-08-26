@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 import chokidar from 'chokidar';
 import { Command } from 'commander';
+import { createRequire } from "node:module";
 import dotenv from 'dotenv';
 import { readFileSync } from 'fs';
 
 import { AutotranslateConfig, autotranslate } from './index.js';
 import { ConsoleLogger, renderErrorMessage } from './logger.js';
+
+const require = createRequire(import.meta.url);
+const { version } = require("../package.json");
 
 interface CliOptions {
   config: string;
@@ -26,7 +30,7 @@ function parseCommandLine(): ParsedOptions {
   program
     .name('autotranslate')
     .description('A utility for automated translation of strings for localizable software')
-    .version('1.0.0')
+    .version(version)
     .option('--config <path>', 'Optional path to the config file to use', 'autotranslate.json')
     .option('--update-hashes', 'Update hashes in target files without generating new translations')
     .option('-v, --verbose', 'Show details of the configuration and the progress of the translations')
