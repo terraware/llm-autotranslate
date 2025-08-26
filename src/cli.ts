@@ -19,7 +19,7 @@ interface CliOptions {
 }
 
 interface ParsedOptions {
-  config: AutotranslateConfig;
+  configs: AutotranslateConfig[];
   watch: boolean;
   updateHashes: boolean;
 }
@@ -39,15 +39,24 @@ function parseCommandLine(): ParsedOptions {
 
   const options = program.opts() as CliOptions;
 
-  // Read and parse config file
   try {
     const configContent = readFileSync(options.config, 'utf-8');
-    const config = JSON.parse(configContent) as AutotranslateConfig;
+    const configJson = JSON.parse(configContent);
+    let configs: AutotranslateConfig[];
+    if (Array.isArray(configJson)) {
+      configs = configJson;
+    } else if (typeof configJson === 'object') {
+      configs = [configJson as AutotranslateConfig];
+    } else {
+      throw new Error('Config file must be an object or an array');
+    }
 
     // Command line --verbose overrides "verbose":false in config file
-    config.verbose = options.verbose || config.verbose;
+    configs.forEach((config) => {
+      config.verbose = options.verbose || config.verbose;
+    });
 
-    return { config, watch: options.watch, updateHashes: options.updateHashes };
+    return { configs, watch: options.watch, updateHashes: options.updateHashes };
   } catch (error) {
     console.error(renderErrorMessage(`Error reading config file ${options.config}`, error));
     process.exit(1);
@@ -57,21 +66,25 @@ function parseCommandLine(): ParsedOptions {
 async function main() {
   try {
     dotenv.config({ quiet: true });
-    const { config, watch, updateHashes } = parseCommandLine();
+    const { configs, watch, updateHashes } = parseCommandLine();
 
     if (watch && updateHashes) {
       console.error('Error: --watch and --update-hashes cannot be used together');
       process.exit(1);
     }
 
-    if (watch) {
-      await runWatchMode(config);
-    } else if (updateHashes) {
-      const { updateHashes: updateHashesFunction } = await import('./updateHashes.js');
-      await updateHashesFunction(config);
-    } else {
-      await autotranslate(config);
-    }
+    const promises = configs.map(async (config) => {
+      if (watch) {
+        return runWatchMode(config);
+      } else if (updateHashes) {
+        const { updateHashes: updateHashesFunction } = await import('./updateHashes.js');
+        return updateHashesFunction(config);
+      } else {
+        return autotranslate(config);
+      }
+    });
+
+    await Promise.all(promises);
   } catch (error) {
     console.error(renderErrorMessage('Error', error));
     process.exit(1);

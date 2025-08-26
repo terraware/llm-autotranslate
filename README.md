@@ -45,8 +45,8 @@ of the translations.
 
 ## Config file
 
-The config file contains a JSON object with the following structure. Some properties
-are optional as noted below.
+The config file contains a JSON object with the following structure or an array of
+JSON objects each with this structure. Some properties are optional as noted below.
 
 ```json
 {
@@ -124,6 +124,57 @@ for the target language. See "Outputs" below.
 
 `verbose` (optional) enables verbose logging of progress and configuration.
 Verbose mode may also be enabled via command-line option.
+
+### Multiple source/target files
+
+If the config file contains an array of objects, autotranslate generates
+translations for the source and target files in each object. Each object can have
+different instructions and outputs. This can be used to generate translations for
+projects whose strings are spread across multiple files.
+
+Don't list the same outputs or target files in multiple places; that'll likely
+lead to inconsistent results.
+
+Translations aren't shared across configurations.
+
+Here's a simple example for a project with separate web and mobile strings files.
+In this example, the language-independent instructions are different for the two
+(perhaps the one for the mobile strings says to use shorter words), but the
+language-specific instructions are the same (perhaps it specifies translations
+for particular English words).
+
+```json
+[
+  {
+    "instructions": "web-instructions.txt",
+    "source": {
+      "file": "src/web-strings-en.csv"
+    },
+    "targets": [
+      {
+        "file": "src/web-strings-es.csv",
+        "format": "csv",
+        "instructions": "instructions-es.txt",
+        "language": "Spanish"
+      }
+    ]
+  },
+  {
+    "instructions": "mobile-instructions.txt",
+    "source": {
+      "file": "src/mobile-strings-en.csv"
+    },
+    "targets": [
+      {
+        "file": "src/mobile-strings-es.csv",
+        "format": "csv",
+        "instructions": "instructions-es.txt",
+        "language": "Spanish"
+      }
+    ]
+  }
+]
+```
 
 ### Formats
 
