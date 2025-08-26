@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
-import { AutotranslateConfig, autotranslate } from '../index.js';
+import { AutotranslateConfig, SilentLogger, autotranslate } from '../index.js';
 
 // Mock the Translator class to use our mock OpenAI
 jest.mock('../translator.js', () => {
@@ -27,6 +27,7 @@ jest.mock('../translator.js', () => {
 });
 
 const testDir = join(__dirname, 'temp-integration-test');
+const logger = new SilentLogger();
 
 beforeAll(() => {
   if (!existsSync(testDir)) {
@@ -78,7 +79,7 @@ welcome,Welcome,`;
       verbose: false,
     };
 
-    await autotranslate(config);
+    await autotranslate(config, logger);
 
     // Verify target file was created and has content
     expect(existsSync(targetFile)).toBe(true);
@@ -122,7 +123,7 @@ hello,Hola,abc123`;
       verbose: false,
     };
 
-    await autotranslate(config);
+    await autotranslate(config, logger);
 
     // Verify target file was updated
     expect(existsSync(targetFile)).toBe(true);
@@ -164,7 +165,7 @@ hello,Hello,A greeting`;
       verbose: false,
     };
 
-    await autotranslate(config);
+    await autotranslate(config, logger);
 
     // Verify both target files were created
     expect(existsSync(spanishFile)).toBe(true);
@@ -210,7 +211,7 @@ hello,Hello,A greeting`;
       verbose: false,
     };
 
-    await autotranslate(config);
+    await autotranslate(config, logger);
 
     // Verify output file was created
     expect(existsSync(outputFile)).toBe(true);
@@ -240,7 +241,7 @@ hello,Hello,A greeting`;
         verbose: false,
       };
 
-      await expect(autotranslate(config)).rejects.toThrow();
+      await expect(autotranslate(config, logger)).rejects.toThrow();
     });
 
     it('should throw error for invalid configuration', async () => {
@@ -255,7 +256,7 @@ hello,Hello,A greeting`;
         verbose: false,
       };
 
-      await expect(autotranslate(config)).rejects.toThrow('Config must specify source.file');
+      await expect(autotranslate(config, logger)).rejects.toThrow('Config must specify source.file');
     });
 
     it('should throw error for no target languages', async () => {
@@ -273,7 +274,7 @@ hello,Hello,A greeting`;
         verbose: false,
       };
 
-      await expect(autotranslate(config)).rejects.toThrow('Config must specify at least one target language');
+      await expect(autotranslate(config, logger)).rejects.toThrow('Config must specify at least one target language');
     });
 
     it('should throw error for invalid batch size', async () => {
@@ -297,7 +298,7 @@ hello,Hello,A greeting`;
         verbose: false,
       };
 
-      await expect(autotranslate(config)).rejects.toThrow('batchSize must be a positive integer');
+      await expect(autotranslate(config, logger)).rejects.toThrow('batchSize must be a positive integer');
     });
   });
 });
