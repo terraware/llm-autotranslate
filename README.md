@@ -232,9 +232,13 @@ quoted. If a string has a description, it is included in the source language's
 file as a comment on the line before the key/value pair. For target-language
 files, the hash is included as a comment on the line before the key/value pair.
 
+Java properties files must use UTF-8 encoding. An encoding header line is
+included in target-language files; it's ignored in source-language files.
+
 Example (source language):
 
 ```
+# encoding: UTF-8
 ABC=Some text\: it''s quoted
 # Description for key DEF
 DEF=Some other text

@@ -180,21 +180,23 @@ describe('JavaPropertiesFormatter', () => {
       const result = formatter.format(records);
       const lines = result.split('\n');
 
-      expect(lines[0]).toBe('# A greeting');
-      expect(lines[1]).toBe('hello=Hello');
-      expect(lines[2]).toBe('goodbye=Goodbye');
-      expect(lines[3]).toBe("special\\:key=Text with ''quotes''");
+      expect(lines[0]).toBe('# encoding: UTF-8');
+      expect(lines[1]).toBe('# A greeting');
+      expect(lines[2]).toBe('hello=Hello');
+      expect(lines[3]).toBe('goodbye=Goodbye');
+      expect(lines[4]).toBe("special\\:key=Text with ''quotes''");
     });
 
     it('should handle empty records', () => {
       const result = formatter.format([]);
-      expect(result).toBe('\n');
+      expect(result).toBe('# encoding: UTF-8\n');
     });
   });
 
   describe('parseSource', () => {
     it('should parse valid properties file', async () => {
-      const content = `# A greeting
+      const content = `# encoding: UTF-8
+# A greeting
 hello=Hello
 # A farewell
 goodbye=Goodbye
@@ -221,6 +223,31 @@ special\\:key=Text with ''quotes''`;
         key: 'special:key',
         text: "Text with 'quotes'",
         description: '',
+        hash: expect.any(String),
+      });
+    });
+
+    it('should not treat encoding header line as a string description', async () => {
+      const content = `# encoding: UTF-8
+hello=Hello
+# encoding: UTF-8
+goodbye=Goodbye\n`;
+      const filePath = join(testDir, 'source.properties');
+      writeFileSync(filePath, content);
+
+      const records = await formatter.parseSource(filePath);
+
+      expect(records).toHaveLength(2);
+      expect(records[0]).toEqual({
+        key: 'hello',
+        text: 'Hello',
+        description: '',
+        hash: expect.any(String),
+      });
+      expect(records[1]).toEqual({
+        key: 'goodbye',
+        text: 'Goodbye',
+        description: 'encoding: UTF-8',
         hash: expect.any(String),
       });
     });
