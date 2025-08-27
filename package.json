@@ -3,6 +3,7 @@
   "version": "0.0.0-dev",
   "description": "A utility for LLM-based automated translation of strings for localizable software",
   "license": "Apache-2.0",
+  "repository": "github:terraware/llm-autotranslate",
   "main": "dist/index.js",
   "bin": {
     "autotranslate": "dist/cli.js"
