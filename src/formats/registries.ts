@@ -1,4 +1,5 @@
 import { CsvFormatter } from './csv.js';
+import { FormatJSJsonFormatter } from './formatjs-json.js';
 import { BidirectionalFormatter, OutputFormatter } from './index.js';
 import { JavaPropertiesFormatter } from './java-properties.js';
 import { JavaScriptConstFormatter } from './javascript-const.js';
@@ -10,6 +11,7 @@ export class OutputFormatterRegistry {
     this.register('java-properties', new JavaPropertiesFormatter());
     this.register('javascript-const', new JavaScriptConstFormatter());
     this.register('csv', new CsvFormatter());
+    this.register('formatjs-json', new FormatJSJsonFormatter());
   }
 
   register(formatName: string, formatter: OutputFormatter): void {
@@ -28,6 +30,7 @@ export class BidirectionalFormatterRegistry {
     this.register('java-properties', new JavaPropertiesFormatter());
     this.register('javascript-const', new JavaScriptConstFormatter());
     this.register('csv', new CsvFormatter());
+    this.register('formatjs-json', new FormatJSJsonFormatter());
   }
 
   register(formatName: string, formatter: BidirectionalFormatter): void {
@@ -51,6 +54,7 @@ export class BidirectionalFormatterRegistry {
     if (ext.endsWith('.properties')) return 'java-properties';
     if (ext.endsWith('.js') || ext.endsWith('.mjs') || ext.endsWith('.ts')) return 'javascript-const';
     if (ext.endsWith('.csv')) return 'csv';
+    if (ext.endsWith('.json')) return 'formatjs-json';
 
     return 'csv'; // default fallback
   }
