@@ -204,6 +204,7 @@ that controls what kind of file is generated.
 List of supported formats, each of which is described in more detail below:
 
 - `csv`
+- `i18next` (v4 JSON format)
 - `java-properties`
 - `javascript-const`
 
@@ -223,6 +224,19 @@ For the target language CSVs, the three columns are:
 1. Key
 2. Text
 3. Hash
+
+#### i18next
+
+Supports strings tables in the the [i18next](https://www.i18next.com/) [JSON v4
+format](https://www.i18next.com/misc/json-format).
+
+For the source language, reads a JSON file where the keys are unique identifiers
+for strings and the values are either dictionaries holding more keys, or strings
+holding text to localize.
+
+For the target languages, writes a JSON file containing the translations with
+an extra top-level `__hashes` key containing a dictionary keyed by string
+identifier, where each value is the hash for the source language key/value pair.
 
 #### java-properties
 

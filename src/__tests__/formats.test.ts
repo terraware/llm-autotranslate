@@ -1,7 +1,9 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
+import { readFile, writeFile } from 'fs/promises';
 import { join } from 'path';
 
 import { CsvFormatter } from '../formats/csv.js';
+import { I18nextJsonV4Formatter } from '../formats/i18next-json-v4.js';
 import { JavaPropertiesFormatter } from '../formats/java-properties.js';
 import { JavaScriptConstFormatter } from '../formats/javascript-const.js';
 import { SourceRecord, TargetRecord } from '../records.js';
@@ -374,6 +376,219 @@ describe('JavaScriptConstFormatter', () => {
       await formatter.writeTarget(filePath, records);
 
       expect(existsSync(filePath)).toBe(true);
+    });
+  });
+});
+
+describe('I18nextJsonV4Formatter', () => {
+  let formatter: I18nextJsonV4Formatter;
+
+  beforeEach(() => {
+    formatter = new I18nextJsonV4Formatter();
+  });
+
+  describe('canParse', () => {
+    it('should return true for .json files', () => {
+      expect(formatter.canParse('test.json')).toBe(true);
+      expect(formatter.canParse('TEST.JSON')).toBe(true);
+      expect(formatter.canParse('/path/to/file.json')).toBe(true);
+    });
+
+    it('should return false for non-json files', () => {
+      expect(formatter.canParse('test.csv')).toBe(false);
+      expect(formatter.canParse('test.properties')).toBe(false);
+      expect(formatter.canParse('test.js')).toBe(false);
+    });
+  });
+
+  describe('format', () => {
+    it('should format flat records into nested JSON', () => {
+      const records = [
+        { key: 'welcome.heading', text: 'Hello', description: '' },
+        { key: 'welcome.continue', text: 'Continue', description: '' },
+      ];
+
+      const result = formatter.format(records);
+      const parsed = JSON.parse(result);
+
+      expect(parsed).toEqual({
+        welcome: {
+          heading: 'Hello',
+          continue: 'Continue',
+        },
+      });
+    });
+
+    it('should handle empty records', () => {
+      const result = formatter.format([]);
+      expect(JSON.parse(result)).toEqual({});
+    });
+  });
+
+  describe('parseSource', () => {
+    it('should parse nested JSON into flat source records', async () => {
+      const content = JSON.stringify({
+        welcome: {
+          heading: 'Hello',
+          continue: 'Continue',
+        },
+      });
+      const filePath = join(testDir, 'source.json');
+      await writeFile(filePath, content);
+
+      const records = await formatter.parseSource(filePath);
+
+      expect(records).toHaveLength(2);
+      expect(records[0]).toEqual({
+        key: 'welcome.heading',
+        text: 'Hello',
+        description: '',
+        hash: expect.any(String),
+      });
+      expect(records[1]).toEqual({
+        key: 'welcome.continue',
+        text: 'Continue',
+        description: '',
+        hash: expect.any(String),
+      });
+    });
+
+    it('should throw error for non-existent file', async () => {
+      await expect(formatter.parseSource('/nonexistent/file.json')).rejects.toThrow('no such file or directory');
+    });
+  });
+
+  describe('parseTarget', () => {
+    it('should parse target JSON with hashes', async () => {
+      const content = JSON.stringify({
+        __hashes: {
+          'welcome.heading': 'abc123',
+          'welcome.continue': 'def456',
+        },
+        welcome: {
+          heading: 'Hola',
+          continue: 'Continuar',
+        },
+      });
+      const filePath = join(testDir, 'target.json');
+      await writeFile(filePath, content);
+
+      const records = await formatter.parseTarget(filePath);
+
+      expect(records).toHaveLength(2);
+      expect(records[0]).toEqual({
+        key: 'welcome.heading',
+        text: 'Hola',
+        hash: 'abc123',
+      });
+      expect(records[1]).toEqual({
+        key: 'welcome.continue',
+        text: 'Continuar',
+        hash: 'def456',
+      });
+    });
+
+    it('should throw error for non-existent file', async () => {
+      await expect(formatter.parseTarget('/nonexistent/target.json')).rejects.toThrow('no such file or directory');
+    });
+
+    it('should return empty array for empty JSON object', async () => {
+      const filePath = join(testDir, 'empty-target.json');
+      await writeFile(filePath, '{}');
+
+      const records = await formatter.parseTarget(filePath);
+      expect(records).toEqual([]);
+    });
+  });
+
+  describe('writeTarget', () => {
+    it('should write nested JSON with hashes and round-trip correctly', async () => {
+      const records: TargetRecord[] = [
+        { key: 'welcome.heading', text: 'Hola', hash: 'abc123' },
+        { key: 'welcome.continue', text: 'Continuar', hash: 'def456' },
+      ];
+      const filePath = join(testDir, 'output-target.json');
+
+      await formatter.writeTarget(filePath, records);
+
+      const writtenRecords = await formatter.parseTarget(filePath);
+      expect(writtenRecords).toEqual(records);
+    });
+  });
+
+  describe('writeSource', () => {
+    it('should write clean nested JSON without hashes', async () => {
+      const records: SourceRecord[] = [
+        { key: 'welcome.heading', text: 'Hello', description: '', hash: 'abc123' },
+        { key: 'welcome.continue', text: 'Continue', description: '', hash: 'def456' },
+      ];
+      const filePath = join(testDir, 'output-source.json');
+
+      await formatter.writeSource(filePath, records);
+
+      const content = JSON.parse(await readFile(filePath, 'utf-8'));
+      expect(content).toEqual({
+        welcome: {
+          heading: 'Hello',
+          continue: 'Continue',
+        },
+      });
+      expect(content.__hashes).toBeUndefined();
+    });
+  });
+
+  describe('nested key handling', () => {
+    it('should handle multi-level nesting correctly', async () => {
+      const content = JSON.stringify({
+        updates: {
+          greeting: {
+            friendly: 'Howdy',
+            formal: 'Salutations',
+          },
+        },
+      });
+      const filePath = join(testDir, 'nested.json');
+      await writeFile(filePath, content);
+
+      const records = await formatter.parseSource(filePath);
+
+      expect(records).toHaveLength(2);
+      expect(records[0].key).toBe('updates.greeting.friendly');
+      expect(records[1].key).toBe('updates.greeting.formal');
+
+      // Round-trip: write and re-read
+      const outPath = join(testDir, 'nested-out.json');
+      await formatter.writeSource(outPath, records);
+      const roundTripped = JSON.parse(await readFile(outPath, 'utf-8'));
+      expect(roundTripped).toEqual({
+        updates: {
+          greeting: {
+            friendly: 'Howdy',
+            formal: 'Salutations',
+          },
+        },
+      });
+    });
+  });
+
+  describe('plural suffixes', () => {
+    it('should treat plural suffixes as leaf keys, not nesting separators', async () => {
+      const content = JSON.stringify({
+        updates: {
+          treeCount_one: '{{count}} Tree',
+          treeCount_other: '{{count}} Trees',
+        },
+      });
+      const filePath = join(testDir, 'plurals.json');
+      await writeFile(filePath, content);
+
+      const records = await formatter.parseSource(filePath);
+
+      expect(records).toHaveLength(2);
+      expect(records[0].key).toBe('updates.treeCount_one');
+      expect(records[0].text).toBe('{{count}} Tree');
+      expect(records[1].key).toBe('updates.treeCount_other');
+      expect(records[1].text).toBe('{{count}} Trees');
     });
   });
 });
