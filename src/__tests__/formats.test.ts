@@ -1,7 +1,9 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
+import { readFile, writeFile } from 'fs/promises';
 import { join } from 'path';
 
 import { CsvFormatter } from '../formats/csv.js';
+import { FormatJSJsonFormatter } from '../formats/formatjs-json.js';
 import { JavaPropertiesFormatter } from '../formats/java-properties.js';
 import { JavaScriptConstFormatter } from '../formats/javascript-const.js';
 import { SourceRecord, TargetRecord } from '../records.js';
@@ -374,6 +376,186 @@ describe('JavaScriptConstFormatter', () => {
       await formatter.writeTarget(filePath, records);
 
       expect(existsSync(filePath)).toBe(true);
+    });
+  });
+});
+
+describe('FormatJSJsonFormatter', () => {
+  let formatter: FormatJSJsonFormatter;
+
+  beforeEach(() => {
+    formatter = new FormatJSJsonFormatter();
+  });
+
+  describe('canParse', () => {
+    it('should return true for .json files', () => {
+      expect(formatter.canParse('test.json')).toBe(true);
+      expect(formatter.canParse('TEST.JSON')).toBe(true);
+      expect(formatter.canParse('/path/to/file.json')).toBe(true);
+    });
+
+    it('should return false for non-json files', () => {
+      expect(formatter.canParse('test.csv')).toBe(false);
+      expect(formatter.canParse('test.properties')).toBe(false);
+      expect(formatter.canParse('test.js')).toBe(false);
+    });
+  });
+
+  describe('format', () => {
+    it('should format records into extracted JSON with defaultMessage and description', () => {
+      const records = [
+        { key: 'welcome.heading', text: 'Hello', description: 'A greeting' },
+        { key: 'welcome.continue', text: 'Continue', description: '' },
+      ];
+
+      const result = formatter.format(records);
+      const parsed = JSON.parse(result);
+
+      expect(parsed).toEqual({
+        'welcome.heading': { defaultMessage: 'Hello', description: 'A greeting' },
+        'welcome.continue': { defaultMessage: 'Continue' },
+      });
+    });
+
+    it('should handle empty records', () => {
+      const result = formatter.format([]);
+      expect(JSON.parse(result)).toEqual({});
+    });
+  });
+
+  describe('parseSource', () => {
+    it('should parse extracted JSON into source records', async () => {
+      const content = JSON.stringify({
+        'welcome.heading': { defaultMessage: 'Hello', description: 'A greeting' },
+        'welcome.continue': { defaultMessage: 'Continue' },
+      });
+      const filePath = join(testDir, 'source.json');
+      await writeFile(filePath, content);
+
+      const records = await formatter.parseSource(filePath);
+
+      expect(records).toHaveLength(2);
+      expect(records[0]).toEqual({
+        key: 'welcome.heading',
+        text: 'Hello',
+        description: 'A greeting',
+        hash: expect.any(String),
+      });
+      expect(records[1]).toEqual({
+        key: 'welcome.continue',
+        text: 'Continue',
+        description: '',
+        hash: expect.any(String),
+      });
+    });
+
+    it('should throw error for non-existent file', async () => {
+      await expect(formatter.parseSource('/nonexistent/file.json')).rejects.toThrow('no such file or directory');
+    });
+  });
+
+  describe('parseTarget', () => {
+    it('should parse target JSON with hashes', async () => {
+      const content = JSON.stringify({
+        'welcome.heading': { defaultMessage: 'Hola', description: 'abc123' },
+        'welcome.continue': { defaultMessage: 'Continuar', description: 'def456' },
+      });
+      const filePath = join(testDir, 'target.json');
+      await writeFile(filePath, content);
+
+      const records = await formatter.parseTarget(filePath);
+
+      expect(records).toHaveLength(2);
+      expect(records[0]).toEqual({
+        key: 'welcome.heading',
+        text: 'Hola',
+        hash: 'abc123',
+      });
+      expect(records[1]).toEqual({
+        key: 'welcome.continue',
+        text: 'Continuar',
+        hash: 'def456',
+      });
+    });
+
+    it('should throw error for non-existent file', async () => {
+      await expect(formatter.parseTarget('/nonexistent/target.json')).rejects.toThrow('no such file or directory');
+    });
+
+    it('should return empty array for empty JSON object', async () => {
+      const filePath = join(testDir, 'empty-target.json');
+      await writeFile(filePath, '{}');
+
+      const records = await formatter.parseTarget(filePath);
+      expect(records).toEqual([]);
+    });
+  });
+
+  describe('writeTarget', () => {
+    it('should write JSON with hashes and round-trip correctly', async () => {
+      const records: TargetRecord[] = [
+        { key: 'welcome.heading', text: 'Hola', hash: 'abc123' },
+        { key: 'welcome.continue', text: 'Continuar', hash: 'def456' },
+      ];
+      const filePath = join(testDir, 'output-target.json');
+
+      await formatter.writeTarget(filePath, records);
+
+      const writtenRecords = await formatter.parseTarget(filePath);
+      expect(writtenRecords).toEqual(records);
+    });
+  });
+
+  describe('writeSource', () => {
+    it('should write extracted JSON with defaultMessage and description', async () => {
+      const records: SourceRecord[] = [
+        { key: 'welcome.heading', text: 'Hello', description: 'A greeting', hash: 'abc123' },
+        { key: 'welcome.continue', text: 'Continue', description: '', hash: 'def456' },
+      ];
+      const filePath = join(testDir, 'output-source.json');
+
+      await formatter.writeSource(filePath, records);
+
+      const content = JSON.parse(await readFile(filePath, 'utf-8'));
+      expect(content).toEqual({
+        'welcome.heading': { defaultMessage: 'Hello', description: 'A greeting' },
+        'welcome.continue': { defaultMessage: 'Continue' },
+      });
+    });
+  });
+
+  describe('ICU message syntax', () => {
+    it('should preserve ICU plural syntax in defaultMessage', async () => {
+      const content = JSON.stringify({
+        'updates.treeCount': {
+          defaultMessage: '{count, plural, one {# Tree} other {# Trees}}',
+          description: 'Pluralized tree count',
+        },
+      });
+      const filePath = join(testDir, 'icu-plurals.json');
+      await writeFile(filePath, content);
+
+      const records = await formatter.parseSource(filePath);
+
+      expect(records).toHaveLength(1);
+      expect(records[0].key).toBe('updates.treeCount');
+      expect(records[0].text).toBe('{count, plural, one {# Tree} other {# Trees}}');
+    });
+
+    it('should preserve ICU argument syntax in defaultMessage', async () => {
+      const content = JSON.stringify({
+        'updates.giftFrom': {
+          defaultMessage: 'Gift from {name}',
+          description: 'Gift attribution',
+        },
+      });
+      const filePath = join(testDir, 'icu-args.json');
+      await writeFile(filePath, content);
+
+      const records = await formatter.parseSource(filePath);
+
+      expect(records).toHaveLength(1);
+      expect(records[0].text).toBe('Gift from {name}');
     });
   });
 });

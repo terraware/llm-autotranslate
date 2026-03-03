@@ -204,6 +204,7 @@ that controls what kind of file is generated.
 List of supported formats, each of which is described in more detail below:
 
 - `csv`
+- `FormatJS` (formerly known as `react-intl`)
 - `java-properties`
 - `javascript-const`
 
@@ -223,6 +224,19 @@ For the target language CSVs, the three columns are:
 1. Key
 2. Text
 3. Hash
+
+#### FormatJS / react-intl JSON
+
+Supports strings tables in the the FormatJS (previously known as `react-intl`)
+JSON format.
+
+For the source language, reads a JSON file where the keys are unique
+identifiers for strings and the values are dictionaries holding a
+`defaultMessage` containing the text to translate and an optional
+`description` describing the text.
+
+For the target languages, writes a JSON file containing the translations where
+the `description` is the hash of the localized message.
 
 #### java-properties
 
